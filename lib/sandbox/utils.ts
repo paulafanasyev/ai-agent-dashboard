@@ -6,6 +6,10 @@
 "use server";
 
 import { Sandbox } from "@vercel/sandbox";
+import type {
+  DiagnosticCheckStatus,
+  VncServerDiagnostics,
+} from "@/lib/sandbox/diagnostics";
 import { resolution } from "./config";
 
 const NOVNC_PORT = 6080;
@@ -176,6 +180,219 @@ with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as resp
     return false;
   }
 }
+
+function diagnosticCheck(
+  status: DiagnosticCheckStatus,
+  detail: string,
+) {
+  return { status, detail } as const;
+}
+
+function hasSandboxAuthentication() {
+  if (process.env.VERCEL === "1") {
+    return diagnosticCheck(
+      "pass",
+      "Automatic Vercel OIDC is available in this deployment.",
+    );
+  }
+  if (process.env.VERCEL_OIDC_TOKEN) {
+    return diagnosticCheck("pass", "A Vercel OIDC token is configured.");
+  }
+  if (
+    process.env.VERCEL_TOKEN &&
+    process.env.VERCEL_TEAM_ID &&
+    process.env.VERCEL_PROJECT_ID
+  ) {
+    return diagnosticCheck(
+      "pass",
+      "Vercel access-token credentials are configured server-side.",
+    );
+  }
+  return diagnosticCheck(
+    "fail",
+    "No server-side Vercel Sandbox authentication was detected.",
+  );
+}
+
+function skippedServices(detail: string) {
+  return {
+    vnc: diagnosticCheck("skipped", detail),
+    noVnc: diagnosticCheck("skipped", detail),
+    streamRoute: diagnosticCheck("skipped", detail),
+  };
+}
+
+interface ServiceProbe {
+  vnc: boolean;
+  noVnc: boolean;
+}
+
+function parseServiceProbe(value: string): ServiceProbe | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "vnc" in parsed &&
+      typeof parsed.vnc === "boolean" &&
+      "noVnc" in parsed &&
+      typeof parsed.noVnc === "boolean"
+    ) {
+      return { vnc: parsed.vnc, noVnc: parsed.noVnc };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export const diagnoseDesktop = async (
+  sandboxId?: string,
+): Promise<VncServerDiagnostics> => {
+  const checkedAt = new Date().toISOString();
+  const platform = process.env.VERCEL === "1" ? "vercel" : "external";
+  const authentication = hasSandboxAuthentication();
+  const snapshot = process.env.SANDBOX_SNAPSHOT_ID
+    ? diagnosticCheck("pass", "A Sandbox snapshot is configured server-side.")
+    : diagnosticCheck("fail", "SANDBOX_SNAPSHOT_ID is missing.");
+
+  if (!sandboxId) {
+    return {
+      checkedAt,
+      overall: "not_ready",
+      deployment: { platform, authentication, snapshot },
+      sandbox: {
+        id: null,
+        controlPlane: diagnosticCheck(
+          "skipped",
+          "Create or connect a desktop before probing the Sandbox.",
+        ),
+        status: null,
+      },
+      services: skippedServices("No Sandbox is allocated yet."),
+      message: "Desktop not allocated. Infrastructure configuration was checked.",
+    };
+  }
+
+  try {
+    const sandbox = await getSandboxWithRetry(sandboxId);
+    const sandboxRunning = sandbox.status === "running";
+    if (!sandboxRunning) {
+      return {
+        checkedAt,
+        overall: "degraded",
+        deployment: { platform, authentication, snapshot },
+        sandbox: {
+          id: sandboxId,
+          controlPlane: diagnosticCheck(
+            "pass",
+            "The Sandbox control plane returned this desktop.",
+          ),
+          status: String(sandbox.status),
+        },
+        services: skippedServices(
+          `Sandbox status is ${String(sandbox.status)} instead of running.`,
+        ),
+        message: "Sandbox exists but is not currently running.",
+      };
+    }
+
+    const probeScript = `import json
+import socket
+import urllib.request
+
+result = {"vnc": False, "noVnc": False}
+try:
+    connection = socket.create_connection(("127.0.0.1", ${VNC_PORT}), timeout=2)
+    connection.close()
+    result["vnc"] = True
+except Exception:
+    pass
+
+try:
+    with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as response:
+        result["noVnc"] = response.status == 200
+except Exception:
+    pass
+
+print(json.dumps(result))`;
+    const result = await sandbox.runCommand({
+      cmd: "python3",
+      args: ["-c", probeScript],
+    });
+    const probe =
+      result.exitCode === 0
+        ? parseServiceProbe((await result.stdout()).trim())
+        : null;
+    const streamUrl = sandbox.domain(NOVNC_PORT);
+    const streamRouteAvailable = streamUrl.startsWith("https://");
+    const vncHealthy = probe?.vnc === true;
+    const noVncHealthy = probe?.noVnc === true;
+    const healthy =
+      authentication.status === "pass" &&
+      snapshot.status === "pass" &&
+      vncHealthy &&
+      noVncHealthy &&
+      streamRouteAvailable;
+
+    return {
+      checkedAt,
+      overall: healthy ? "healthy" : "degraded",
+      deployment: { platform, authentication, snapshot },
+      sandbox: {
+        id: sandboxId,
+        controlPlane: diagnosticCheck(
+          "pass",
+          "The Sandbox is reachable through the Vercel control plane.",
+        ),
+        status: String(sandbox.status),
+      },
+      services: {
+        vnc: diagnosticCheck(
+          vncHealthy ? "pass" : "fail",
+          vncHealthy
+            ? `Xvnc is accepting connections on port ${VNC_PORT}.`
+            : `Nothing responded on VNC port ${VNC_PORT}.`,
+        ),
+        noVnc: diagnosticCheck(
+          noVncHealthy ? "pass" : "fail",
+          noVncHealthy
+            ? `noVNC returned HTTP 200 on port ${NOVNC_PORT}.`
+            : `noVNC did not return HTTP 200 on port ${NOVNC_PORT}.`,
+        ),
+        streamRoute: diagnosticCheck(
+          streamRouteAvailable ? "pass" : "fail",
+          streamRouteAvailable
+            ? "Vercel generated an HTTPS stream route."
+            : "No HTTPS stream route was generated.",
+        ),
+      },
+      message: healthy
+        ? "Sandbox, VNC, noVNC, and the external stream route are healthy."
+        : "One or more VNC checks failed. Review the details before reconnecting.",
+    };
+  } catch (error) {
+    return {
+      checkedAt,
+      overall: "degraded",
+      deployment: { platform, authentication, snapshot },
+      sandbox: {
+        id: sandboxId,
+        controlPlane: diagnosticCheck(
+          "fail",
+          error instanceof Error
+            ? error.message.slice(0, 300)
+            : "The Sandbox control plane request failed.",
+        ),
+        status: null,
+      },
+      services: skippedServices(
+        "Service checks require a reachable Sandbox.",
+      ),
+      message: "The Sandbox could not be resolved from this deployment.",
+    };
+  }
+};
 
 export const checkDesktopHealth = async (id: string) => {
   try {

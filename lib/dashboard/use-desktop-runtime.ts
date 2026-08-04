@@ -14,7 +14,11 @@ import {
 } from "@/lib/dashboard/events";
 import { persistSessions } from "@/lib/dashboard/session-storage";
 import type { ChatSession, RuntimeEvent } from "@/lib/dashboard/types";
-import { checkDesktopHealth, getDesktopURL } from "@/lib/sandbox/utils";
+import {
+  checkDesktopHealth,
+  diagnoseDesktop,
+  getDesktopURL,
+} from "@/lib/sandbox/utils";
 
 interface DesktopRuntimeOptions {
   sessions: ChatSession[];
@@ -326,6 +330,13 @@ export function useDesktopRuntime({
     void connectDesktop(activeSessionIdRef.current);
   }, [connectDesktop, removeStreamUrl]);
 
+  const runActiveDesktopDiagnostics = useCallback(async () => {
+    const session = sessionsRef.current.find(
+      (item) => item.id === activeSessionIdRef.current,
+    );
+    return diagnoseDesktop(session?.sandboxId ?? undefined);
+  }, []);
+
   const destroyDesktop = useCallback(
     async (sessionId: string, sandboxId: string) => {
       const runtimeEvent = startRuntimeEvent(sessionId, "sandbox_destroy", {
@@ -445,6 +456,7 @@ export function useDesktopRuntime({
     removeStreamUrl,
     destroyDesktop,
     refreshActiveDesktop,
+    runActiveDesktopDiagnostics,
     handleViewerStateChange,
   };
 }

@@ -81,3 +81,22 @@ test("clears all sessions only after the exact confirmation phrase", async ({
     .poll(() => page.evaluate(() => sessionStorage.length))
     .toBe(0);
 });
+
+test("runs VNC diagnostics without exposing infrastructure secrets", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "VNC Diagnostics" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "VNC Diagnostics" }),
+  ).toBeVisible();
+  await expect(page.getByText("Sandbox not allocated")).toBeVisible();
+  await page.getByRole("button", { name: "Run diagnostics" }).click();
+  await expect(page.getByText("Desktop is not allocated")).toBeVisible();
+  await expect(page.getByText("Vercel authentication")).toBeVisible();
+  await expect(page.getByText(/snap_[A-Za-z0-9]+/)).toHaveCount(0);
+  await expect(page.getByText(/VERCEL_(?:OIDC_)?TOKEN=/)).toHaveCount(0);
+});

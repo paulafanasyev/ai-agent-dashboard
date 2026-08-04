@@ -39,6 +39,7 @@ are implemented on `main`.
 - Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
 - Named desktop creation plus persistent pinning, renaming, drag ordering, hover details, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
 - Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
+- Server-backed VNC Diagnostics in Settings checks deployment authentication, snapshot presence, Sandbox reachability, ports 5900/6080, and the external stream route without exposing credential values.
 - Transient Vercel Sandbox lookup failures are retried, while unrecoverable startup errors remain synchronized across the desktop viewer and activity feedback.
 - Persistent per-conversation FIFO task queues: prompts entered before Desktop readiness or during an active run execute automatically when safe.
 - Frame-coalesced scrolling and dragging, throttled live-state projection, idle-time persistence, lazy screenshot decoding, and a memoized VNC viewer isolated from token-by-token chat rendering.
@@ -189,8 +190,8 @@ pnpm test:e2e
 ```
 
 The browser suite covers first-open tutorial persistence, replay from Settings,
-and named Desktop creation at desktop and mobile breakpoints without requiring
-a live Sandbox credential.
+named Desktop creation, phrase-confirmed cache deletion, and VNC diagnostics at
+desktop and mobile breakpoints without requiring a live Sandbox credential.
 
 ## Environment Variables
 

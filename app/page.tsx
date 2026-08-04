@@ -36,6 +36,7 @@ import { useDashboardPersistence } from "@/lib/dashboard/use-dashboard-persisten
 import { useDashboardTutorial } from "@/lib/dashboard/use-dashboard-tutorial";
 import { useDesktopLayout } from "@/lib/dashboard/use-desktop-layout";
 import { useDesktopRuntime } from "@/lib/dashboard/use-desktop-runtime";
+import type { VncClientDiagnostics } from "@/lib/sandbox/diagnostics";
 
 export default function DashboardPage() {
   const {
@@ -69,6 +70,7 @@ export default function DashboardPage() {
     removeStreamUrl,
     destroyDesktop,
     refreshActiveDesktop,
+    runActiveDesktopDiagnostics,
     handleViewerStateChange,
   } = useDesktopRuntime({
     sessions,
@@ -530,6 +532,21 @@ export default function DashboardPage() {
     [activeConversation?.events],
   );
 
+  const vncClientDiagnostics = useMemo<VncClientDiagnostics>(
+    () => ({
+      desktopTitle: activeSession?.title ?? null,
+      sandboxId: activeSession?.sandboxId ?? null,
+      connectionStatus: activeSession?.connectionStatus ?? "no_desktop",
+      streamAttached: activeSession
+        ? Boolean(streamUrls[activeSession.id])
+        : false,
+      viewerReady: activeSession
+        ? viewerReadyRef.current.has(activeSession.id)
+        : false,
+    }),
+    [activeSession, streamUrls, viewerReadyRef],
+  );
+
   const settingsControl = useMemo(
     () => (
       <DashboardSettings
@@ -539,6 +556,9 @@ export default function DashboardPage() {
         onConfigChange={updateModelConfig}
         onReplayTutorial={replayTutorial}
         onClearAllData={clearAllData}
+        vncClientDiagnostics={vncClientDiagnostics}
+        onRunVncDiagnostics={runActiveDesktopDiagnostics}
+        onReconnectVnc={refreshActiveDesktop}
       />
     ),
     [
@@ -546,7 +566,10 @@ export default function DashboardPage() {
       clearAllData,
       modelConfig,
       replayTutorial,
+      refreshActiveDesktop,
+      runActiveDesktopDiagnostics,
       updateModelConfig,
+      vncClientDiagnostics,
     ],
   );
 
@@ -581,6 +604,9 @@ export default function DashboardPage() {
       onConfigChange={updateModelConfig}
       onReplayTutorial={replayTutorial}
       onClearAllData={clearAllData}
+      vncClientDiagnostics={vncClientDiagnostics}
+      onRunVncDiagnostics={runActiveDesktopDiagnostics}
+      onReconnectVnc={refreshActiveDesktop}
     />
   );
 

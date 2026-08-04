@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  MonitorCog,
   Palette,
   Play,
   Settings,
@@ -20,6 +21,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { ThemeSettings } from "@/components/theme-switcher";
 import { DataSettings } from "@/components/settings/data-settings";
+import { VncDiagnosticsSettings } from "@/components/settings/vnc-diagnostics-settings";
 import {
   SaveStatus,
   SettingsChoice,
@@ -37,6 +39,10 @@ import {
   type ClientModelConfig,
   type KimiReasoningEffort,
 } from "@/lib/ai/model-config";
+import type {
+  VncClientDiagnostics,
+  VncServerDiagnostics,
+} from "@/lib/sandbox/diagnostics";
 import { cn } from "@/lib/utils";
 
 interface DashboardSettingsProps {
@@ -46,11 +52,14 @@ interface DashboardSettingsProps {
   onConfigChange: (config: ClientModelConfig) => void;
   onReplayTutorial: () => void;
   onClearAllData: () => Promise<void>;
+  vncClientDiagnostics: VncClientDiagnostics;
+  onRunVncDiagnostics: () => Promise<VncServerDiagnostics>;
+  onReconnectVnc: () => void;
 }
 
 type AccessMode = "project" | "byok";
 type ByokProvider = "kimi" | "custom";
-type SettingsSection = "api" | "appearance" | "tutorial" | "data";
+type SettingsSection = "api" | "appearance" | "tutorial" | "vnc" | "data";
 
 function sameConfig(left: ClientModelConfig, right: ClientModelConfig) {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -63,6 +72,9 @@ export function DashboardSettings({
   onConfigChange,
   onReplayTutorial,
   onClearAllData,
+  vncClientDiagnostics,
+  onRunVncDiagnostics,
+  onReconnectVnc,
 }: DashboardSettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [accessMode, setAccessMode] = useState<AccessMode>(
@@ -252,7 +264,7 @@ export function DashboardSettings({
                 </p>
                 <nav
                   aria-label="Settings sections"
-                  className="grid grid-cols-4 gap-1 md:flex md:flex-col"
+                  className="grid grid-cols-5 gap-1 md:flex md:flex-col"
                 >
                   <SettingsNavItem
                     icon={<KeyRound className="size-4" />}
@@ -277,6 +289,14 @@ export function DashboardSettings({
                     description="Replay the product tour"
                     active={activeSection === "tutorial"}
                     onClick={() => setActiveSection("tutorial")}
+                  />
+                  <SettingsNavItem
+                    icon={<MonitorCog className="size-4" />}
+                    label="VNC Diagnostics"
+                    compactLabel="VNC"
+                    description="Connection health"
+                    active={activeSection === "vnc"}
+                    onClick={() => setActiveSection("vnc")}
                   />
                   <SettingsNavItem
                     icon={<Database className="size-4" />}
@@ -530,6 +550,13 @@ export function DashboardSettings({
                       </div>
                     </div>
                   </section>
+                ) : activeSection === "vnc" ? (
+                  <VncDiagnosticsSettings
+                    client={vncClientDiagnostics}
+                    reconnectDisabled={modelDisabled}
+                    onRunDiagnostics={onRunVncDiagnostics}
+                    onReconnect={onReconnectVnc}
+                  />
                 ) : (
                   <DataSettings
                     disabled={modelDisabled}
