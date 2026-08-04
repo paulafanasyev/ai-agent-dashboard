@@ -1,3 +1,8 @@
+/**
+ * File: components/ui/label.tsx
+ * Purpose: Wrap the accessible Radix label primitive with project styling.
+ * Problem solved: Associates readable labels with form controls consistently.
+ */
 "use client"
 
 import * as React from "react"

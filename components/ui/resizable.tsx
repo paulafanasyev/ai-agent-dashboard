@@ -1,3 +1,8 @@
+/**
+ * File: components/ui/resizable.tsx
+ * Purpose: Expose styled resizable panel primitives for the dashboard layout.
+ * Problem solved: Lets users balance chat and desktop space on desktop and tablet viewports.
+ */
 "use client"
 
 import * as React from "react"

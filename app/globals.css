@@ -1,3 +1,8 @@
+/**
+ * File: app/globals.css
+ * Purpose: Define global design tokens, Tailwind integrations, and shared animation styles.
+ * Problem solved: Keeps the dashboard's visual foundation consistent across every viewport and component.
+ */
 @import "tailwindcss";
 @source "../node_modules/streamdown/dist/*.js";
 
@@ -6,9 +11,37 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.chat-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+.vnc-render-surface {
+  contain: layout paint;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-zinc-50: var(--tone-50);
+  --color-zinc-100: var(--tone-100);
+  --color-zinc-200: var(--tone-200);
+  --color-zinc-300: var(--tone-300);
+  --color-zinc-400: var(--tone-400);
+  --color-zinc-500: var(--tone-500);
+  --color-zinc-600: var(--tone-600);
+  --color-zinc-700: var(--tone-700);
+  --color-zinc-800: var(--tone-800);
+  --color-zinc-900: var(--tone-900);
+  --color-zinc-950: var(--tone-950);
+  --color-violet-50: var(--brand-50);
+  --color-violet-100: var(--brand-100);
+  --color-violet-200: var(--brand-200);
+  --color-violet-400: var(--brand-400);
+  --color-violet-500: var(--brand-500);
+  --color-violet-600: var(--brand-600);
+  --color-violet-700: var(--brand-700);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -47,75 +80,166 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.21 0.006 285.885);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
+:root,
+[data-theme="vercel"] {
+  color-scheme: dark;
+  --theme-background: #000000;
+  --surface: #0a0a0a;
+  --tone-50: #111111;
+  --tone-100: #1a1a1a;
+  --tone-200: #262626;
+  --tone-300: #3f3f46;
+  --tone-400: #71717a;
+  --tone-500: #a1a1aa;
+  --tone-600: #d4d4d8;
+  --tone-700: #e4e4e7;
+  --tone-800: #f4f4f5;
+  --tone-900: #fafafa;
+  --tone-950: #ffffff;
+  --brand-50: #18181b;
+  --brand-100: #27272a;
+  --brand-200: #3f3f46;
+  --brand-400: #a1a1aa;
+  --brand-500: #fafafa;
+  --brand-600: #ffffff;
+  --brand-700: #ffffff;
+  --brand-contrast: #000000;
+  --radius: 0.5rem;
 }
 
-.dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.141 0.005 285.823);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.141 0.005 285.823);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.274 0.006 286.033);
-  --input: oklch(0.274 0.006 286.033);
-  --ring: oklch(0.442 0.017 285.786);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.274 0.006 286.033);
-  --sidebar-ring: oklch(0.442 0.017 285.786);
+[data-theme="vue"] {
+  --theme-background: #1a1a1a;
+  --surface: #242424;
+  --tone-50: #242424;
+  --tone-100: #2f2f2f;
+  --tone-200: #3a3a3a;
+  --tone-300: #545454;
+  --tone-400: #737373;
+  --tone-500: #a3a3a3;
+  --tone-600: #c2c2c2;
+  --tone-700: #d6d6d6;
+  --tone-800: #ebebeb;
+  --tone-900: #f5f5f5;
+  --tone-950: #ffffff;
+  --brand-50: #14372a;
+  --brand-100: #194936;
+  --brand-200: #216348;
+  --brand-400: #42b883;
+  --brand-500: #42d392;
+  --brand-600: #65ddb0;
+  --brand-700: #8fe8c7;
+  --brand-contrast: #0b1712;
+  --radius: 0.75rem;
+}
+
+[data-theme="codex"] {
+  --theme-background: #0c0e0d;
+  --surface: #121514;
+  --tone-50: #171b19;
+  --tone-100: #1d2320;
+  --tone-200: #2b332f;
+  --tone-300: #404b46;
+  --tone-400: #65716b;
+  --tone-500: #929d97;
+  --tone-600: #b7c0bb;
+  --tone-700: #d0d7d3;
+  --tone-800: #e3e8e5;
+  --tone-900: #f0f3f1;
+  --tone-950: #ffffff;
+  --brand-50: #0b2a21;
+  --brand-100: #0d3b2d;
+  --brand-200: #0f5942;
+  --brand-400: #10a37f;
+  --brand-500: #19c37d;
+  --brand-600: #4bd69d;
+  --brand-700: #8ae8c0;
+  --brand-contrast: #06150f;
+  --radius: 0.75rem;
+}
+
+[data-theme="xcode"] {
+  --theme-background: #121214;
+  --surface: #1c1c1e;
+  --tone-50: #232326;
+  --tone-100: #2c2c2e;
+  --tone-200: #3a3a3c;
+  --tone-300: #48484a;
+  --tone-400: #636366;
+  --tone-500: #8e8e93;
+  --tone-600: #aeaeb2;
+  --tone-700: #c7c7cc;
+  --tone-800: #e5e5ea;
+  --tone-900: #f2f2f7;
+  --tone-950: #ffffff;
+  --brand-50: #071f3d;
+  --brand-100: #092c55;
+  --brand-200: #0a3d75;
+  --brand-400: #007aff;
+  --brand-500: #0a84ff;
+  --brand-600: #64d2ff;
+  --brand-700: #a8dcff;
+  --brand-contrast: #ffffff;
+  --radius: 0.75rem;
+}
+
+[data-theme="github"] {
+  --theme-background: #0d1117;
+  --surface: #151b23;
+  --tone-50: #151b23;
+  --tone-100: #212830;
+  --tone-200: #262c36;
+  --tone-300: #3d444d;
+  --tone-400: #656c76;
+  --tone-500: #9198a1;
+  --tone-600: #b7bdc8;
+  --tone-700: #d1d7e0;
+  --tone-800: #e6edf3;
+  --tone-900: #f0f6fc;
+  --tone-950: #ffffff;
+  --brand-50: #051d4d;
+  --brand-100: #0c2d6b;
+  --brand-200: #0d419d;
+  --brand-400: #388bfd;
+  --brand-500: #1f6feb;
+  --brand-600: #58a6ff;
+  --brand-700: #79c0ff;
+  --brand-contrast: #ffffff;
+  --radius: 0.375rem;
+}
+
+:root {
+  --background: var(--theme-background);
+  --foreground: var(--tone-900);
+  --card: var(--surface);
+  --card-foreground: var(--tone-900);
+  --popover: var(--surface);
+  --popover-foreground: var(--tone-900);
+  --primary: var(--brand-500);
+  --primary-foreground: var(--brand-contrast);
+  --secondary: var(--tone-100);
+  --secondary-foreground: var(--tone-900);
+  --muted: var(--tone-100);
+  --muted-foreground: var(--tone-500);
+  --accent: var(--brand-50);
+  --accent-foreground: var(--brand-700);
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: var(--tone-200);
+  --input: var(--tone-200);
+  --ring: var(--brand-400);
+  --chart-1: var(--brand-500);
+  --chart-2: #42b883;
+  --chart-3: #d97706;
+  --chart-4: #8250df;
+  --chart-5: #dc2626;
+  --sidebar: var(--tone-50);
+  --sidebar-foreground: var(--tone-900);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: var(--brand-contrast);
+  --sidebar-accent: var(--tone-100);
+  --sidebar-accent-foreground: var(--tone-900);
+  --sidebar-border: var(--tone-200);
+  --sidebar-ring: var(--brand-400);
 }
 
 @layer base {

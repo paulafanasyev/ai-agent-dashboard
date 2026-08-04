@@ -1,312 +1,1118 @@
+/**
+ * File: app/page.tsx
+ * Purpose: Compose the session-aware, responsive AI agent dashboard.
+ * Problem solved: Coordinates chat, event inspection, model selection, and isolated desktops in one workspace.
+ */
 "use client";
 
-import { PreviewMessage } from "@/components/message";
-import { getDesktopURL } from "@/lib/sandbox/utils";
-import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
-import { useChat } from "@ai-sdk/react";
-import { useEffect, useState } from "react";
-import { Input } from "@/components/input";
-import { Button } from "@/components/ui/button";
+import type { UIMessage } from "ai";
+import { Bot, Monitor, Plus, Radio } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { DeployButton, ProjectInfo } from "@/components/project-info";
-import { AISDKLogo } from "@/components/icons";
-import { PromptSuggestions } from "@/components/prompt-suggestions";
+import { ChatWorkspace } from "@/components/dashboard/chat-workspace";
+import {
+  CreateDesktopDialog,
+  DeleteDesktopDialog,
+  RenameDesktopDialog,
+} from "@/components/dashboard/desktop-dialogs";
+import { MobileDesktopSwitcher } from "@/components/dashboard/mobile-desktop-switcher";
+import { SessionSidebar } from "@/components/dashboard/session-sidebar";
+import { ToolInspector } from "@/components/dashboard/tool-inspector";
+import {
+  VncViewer,
+  type VncDisplayMode,
+  type VncViewerState,
+} from "@/components/dashboard/vnc-viewer";
+import { DashboardSettings } from "@/components/model-settings";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { ABORTED } from "@/lib/utils";
+import {
+  DEFAULT_MODEL_CONFIG,
+  MODEL_SETTINGS_STORAGE_KEY,
+  parseStoredModelConfig,
+  type ClientModelConfig,
+} from "@/lib/ai/model-config";
+import {
+  ACTIVE_SESSION_STORAGE_KEY,
+  SESSION_STORAGE_KEY,
+  createEmptyConversation,
+  createEmptySession,
+  loadSessions,
+  persistSessions,
+} from "@/lib/dashboard/session-storage";
+import type {
+  AgentEvent,
+  AgentStatus,
+  ChatSession,
+  QueuedPrompt,
+} from "@/lib/dashboard/types";
+import { checkDesktopHealth, getDesktopURL } from "@/lib/sandbox/utils";
+import { cn } from "@/lib/utils";
 
-export default function Chat() {
-  // Create separate refs for mobile and desktop to ensure both scroll properly
-  const [desktopContainerRef, desktopEndRef] = useScrollToBottom();
-  const [mobileContainerRef, mobileEndRef] = useScrollToBottom();
+function modelEndpointSignature(config: ClientModelConfig) {
+  if (config.provider === "kimi") {
+    return `${config.provider}:${config.modelId}`;
+  }
+  if (config.provider === "custom") {
+    return `${config.provider}:${config.baseUrl}:${config.modelId}`;
+  }
+  return config.provider;
+}
 
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [sandboxId, setSandboxId] = useState<string | null>(null);
+function firstUserMessageTitle(messages: UIMessage[]) {
+  const message = messages.find((item) => item.role === "user");
+  if (!message) return null;
+  const text = message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
+  if (!text) return null;
+  return text.length > 34 ? `${text.slice(0, 34)}…` : text;
+}
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit,
-    status,
-    stop: stopGeneration,
-    append,
-    setMessages,
-  } = useChat({
-    api: "/api/chat",
-    id: sandboxId ?? undefined,
-    body: {
-      sandboxId,
-    },
-    maxSteps: 30,
-    onError: (error) => {
-      console.error(error);
-      toast.error("There was an error", {
-        description: "Please try again later.",
-        richColors: true,
-        position: "top-center",
-      });
-    },
-  });
-
-  const stop = () => {
-    stopGeneration();
-
-    const lastMessage = messages.at(-1);
-    const lastMessageLastPart = lastMessage?.parts.at(-1);
-    if (
-      lastMessage?.role === "assistant" &&
-      lastMessageLastPart?.type === "tool-invocation"
-    ) {
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        {
-          ...lastMessage,
-          parts: [
-            ...lastMessage.parts.slice(0, -1),
-            {
-              ...lastMessageLastPart,
-              toolInvocation: {
-                ...lastMessageLastPart.toolInvocation,
-                state: "result",
-                result: ABORTED,
-              },
-            },
-          ],
-        },
-      ]);
-    }
-  };
-
-  const isLoading = status !== "ready";
-
-  const refreshDesktop = async () => {
-    try {
-      setIsInitializing(true);
-      const { streamUrl, id } = await getDesktopURL(sandboxId || undefined);
-      // console.log("Refreshed desktop connection with ID:", id);
-      setStreamUrl(streamUrl);
-      setSandboxId(id);
-    } catch (err) {
-      console.error("Failed to refresh desktop:", err);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  // Kill desktop on page close
-  useEffect(() => {
-    if (!sandboxId) return;
-
-    // Function to kill the desktop - just one method to reduce duplicates
-    const killDesktop = () => {
-      if (!sandboxId) return;
-
-      // Use sendBeacon which is best supported across browsers
-      navigator.sendBeacon(
-        `/api/kill-desktop?sandboxId=${encodeURIComponent(sandboxId)}`,
-      );
-    };
-
-    // Detect iOS / Safari
-    const isIOS =
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-    // Choose exactly ONE event handler based on the browser
-    if (isIOS || isSafari) {
-      // For Safari on iOS, use pagehide which is most reliable
-      window.addEventListener("pagehide", killDesktop);
-
-      return () => {
-        window.removeEventListener("pagehide", killDesktop);
-        // Also kill desktop when component unmounts
-        killDesktop();
-      };
-    } else {
-      // For all other browsers, use beforeunload
-      window.addEventListener("beforeunload", killDesktop);
-
-      return () => {
-        window.removeEventListener("beforeunload", killDesktop);
-        // Also kill desktop when component unmounts
-        killDesktop();
-      };
-    }
-  }, [sandboxId]);
+function useDesktopLayout() {
+  const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
-    // Initialize desktop and get stream URL when the component mounts
-    const init = async () => {
-      try {
-        setIsInitializing(true);
-
-        // Use the provided ID or create a new one
-        const { streamUrl, id } = await getDesktopURL(sandboxId ?? undefined);
-
-        setStreamUrl(streamUrl);
-        setSandboxId(id);
-      } catch (err) {
-        console.error("Failed to initialize desktop:", err);
-        toast.error("Failed to initialize desktop");
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const query = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
   }, []);
 
-  return (
-    <div className="flex h-dvh relative">
-      {/* Mobile/tablet banner */}
-      <div className="flex items-center justify-center fixed left-1/2 -translate-x-1/2 top-5 shadow-md text-xs mx-auto rounded-lg h-8 w-fit bg-blue-600 text-white px-3 py-2 text-left z-50 xl:hidden">
-        <span>Headless mode</span>
-      </div>
+  return isDesktop;
+}
 
-      {/* Resizable Panels */}
-      <div className="w-full hidden xl:block">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Desktop Stream Panel */}
-          <ResizablePanel
-            defaultSize={70}
-            minSize={40}
-            className="bg-black relative items-center justify-center"
-          >
-            {streamUrl ? (
-              <>
-                <iframe
-                  src={streamUrl}
-                  className="w-full h-full"
-                  style={{
-                    transformOrigin: "center",
-                    width: "100%",
-                    height: "100%",
-                  }}
-                  allow="autoplay"
-                />
-                <Button
-                  onClick={refreshDesktop}
-                  className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white px-3 py-1 rounded text-sm z-10"
-                  disabled={isInitializing}
-                >
-                  {isInitializing ? "Creating desktop..." : "New desktop"}
-                </Button>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-white">
-                {isInitializing
-                  ? "Initializing desktop..."
-                  : "Loading stream..."}
-              </div>
-            )}
-          </ResizablePanel>
+export default function DashboardPage() {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [streamUrls, setStreamUrls] = useState<Record<string, string>>({});
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>("idle");
+  const [vncDisplayMode, setVncDisplayMode] =
+    useState<VncDisplayMode>("embedded");
+  const [isCreateDesktopOpen, setIsCreateDesktopOpen] = useState(false);
+  const [deleteDesktopId, setDeleteDesktopId] = useState<string | null>(null);
+  const [renameDesktopId, setRenameDesktopId] = useState<string | null>(null);
+  const [modelConfig, setModelConfig] = useState<ClientModelConfig>(
+    DEFAULT_MODEL_CONFIG,
+  );
+  const [isHydrated, setIsHydrated] = useState(false);
+  const isDesktop = useDesktopLayout();
+  const sessionsRef = useRef(sessions);
+  const streamUrlsRef = useRef(streamUrls);
+  const activeSessionIdRef = useRef(activeSessionId);
+  const connectingRef = useRef(new Set<string>());
+  const verifyingRef = useRef(new Set<string>());
+  const viewerReadyRef = useRef(new Set<string>());
 
-          <ResizableHandle withHandle />
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
-          {/* Chat Interface Panel */}
-          <ResizablePanel
-            defaultSize={30}
-            minSize={25}
-            className="flex flex-col border-l border-zinc-200"
-          >
-            <div className="bg-white py-4 px-4 flex justify-between items-center">
-              <AISDKLogo />
-              <DeployButton />
-            </div>
+  useEffect(() => {
+    streamUrlsRef.current = streamUrls;
+  }, [streamUrls]);
 
-            <div
-              className="flex-1 space-y-6 py-4 overflow-y-auto px-4"
-              ref={desktopContainerRef}
-            >
-              {messages.length === 0 ? <ProjectInfo /> : null}
-              {messages.map((message, i) => (
-                <PreviewMessage
-                  message={message}
-                  key={message.id}
-                  isLoading={isLoading}
-                  status={status}
-                  isLatestMessage={i === messages.length - 1}
-                />
-              ))}
-              <div ref={desktopEndRef} className="pb-2" />
-            </div>
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
-            {messages.length === 0 && (
-              <PromptSuggestions
-                disabled={isInitializing}
-                submitPrompt={(prompt: string) =>
-                  append({ role: "user", content: prompt })
-                }
-              />
-            )}
-            <div className="bg-white">
-              <form onSubmit={handleSubmit} className="p-4">
-                <Input
-                  handleInputChange={handleInputChange}
-                  input={input}
-                  isInitializing={isInitializing}
-                  isLoading={isLoading}
-                  status={status}
-                  stop={stop}
-                />
-              </form>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+  useEffect(() => {
+    const loadedSessions = loadSessions();
+    const hasStoredSessionSnapshot =
+      localStorage.getItem(SESSION_STORAGE_KEY) !== null;
+    const nextSessions =
+      loadedSessions.length > 0 || hasStoredSessionSnapshot
+        ? loadedSessions
+        : [createEmptySession("Desktop 1")];
+    const storedActiveId = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    const nextActiveId =
+      nextSessions.length === 0
+        ? null
+        : nextSessions.some((session) => session.id === storedActiveId)
+          ? storedActiveId
+          : nextSessions[0].id;
 
-      {/* Mobile View (Chat Only) */}
-      <div className="w-full xl:hidden flex flex-col">
-        <div className="bg-white py-4 px-4 flex justify-between items-center">
-          <AISDKLogo />
-          <DeployButton />
-        </div>
+    setSessions(nextSessions);
+    activeSessionIdRef.current = nextActiveId;
+    setActiveSessionId(nextActiveId);
 
-        <div
-          className="flex-1 space-y-6 py-4 overflow-y-auto px-4"
-          ref={mobileContainerRef}
-        >
-          {messages.length === 0 ? <ProjectInfo /> : null}
-          {messages.map((message, i) => (
-            <PreviewMessage
-              message={message}
-              key={message.id}
-              isLoading={isLoading}
-              status={status}
-              isLatestMessage={i === messages.length - 1}
-            />
-          ))}
-          <div ref={mobileEndRef} className="pb-2" />
-        </div>
+    try {
+      const storedModel = sessionStorage.getItem(MODEL_SETTINGS_STORAGE_KEY);
+      if (storedModel) {
+        const parsed = parseStoredModelConfig(JSON.parse(storedModel));
+        if (parsed) setModelConfig(parsed);
+      }
+    } catch {
+      sessionStorage.removeItem(MODEL_SETTINGS_STORAGE_KEY);
+    }
 
-        {messages.length === 0 && (
-          <PromptSuggestions
-            disabled={isInitializing}
-            submitPrompt={(prompt: string) =>
-              append({ role: "user", content: prompt })
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    let idleCallback: number | null = null;
+    const timeout = window.setTimeout(() => {
+      if ("requestIdleCallback" in window) {
+        idleCallback = window.requestIdleCallback(
+          () => persistSessions(sessions),
+          { timeout: 1200 },
+        );
+        return;
+      }
+      persistSessions(sessions);
+    }, 700);
+    return () => {
+      window.clearTimeout(timeout);
+      if (idleCallback !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleCallback);
+      }
+    };
+  }, [isHydrated, sessions]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (activeSessionId) {
+      localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, activeSessionId);
+    } else {
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    }
+  }, [activeSessionId, isHydrated]);
+
+  const connectDesktop = useCallback(async (sessionId: string) => {
+    if (
+      connectingRef.current.has(sessionId) ||
+      verifyingRef.current.has(sessionId)
+    ) {
+      return;
+    }
+    const session = sessionsRef.current.find((item) => item.id === sessionId);
+    if (!session) return;
+
+    connectingRef.current.add(sessionId);
+    setSessions((previous) =>
+      previous.map((item) =>
+        item.id === sessionId
+          ? {
+              ...item,
+              connectionStatus: session.sandboxId ? "checking" : "creating",
             }
-          />
-        )}
-        <div className="bg-white">
-          <form onSubmit={handleSubmit} className="p-4">
-            <Input
-              handleInputChange={handleInputChange}
-              input={input}
-              isInitializing={isInitializing}
-              isLoading={isLoading}
-              status={status}
-              stop={stop}
-            />
-          </form>
+          : item,
+      ),
+    );
+
+    try {
+      const desktop = await getDesktopURL(session.sandboxId ?? undefined);
+      setStreamUrls((previous) => ({
+        ...previous,
+        [sessionId]: desktop.streamUrl,
+      }));
+      viewerReadyRef.current.delete(sessionId);
+      setSessions((previous) =>
+        previous.map((item) =>
+          item.id === sessionId
+            ? {
+                ...item,
+                sandboxId: desktop.id,
+                generation:
+                  item.sandboxId && item.sandboxId !== desktop.id
+                    ? item.generation + 1
+                    : item.generation,
+                connectionStatus: "checking",
+              }
+            : item,
+        ),
+      );
+    } catch {
+      setSessions((previous) =>
+        previous.map((item) =>
+          item.id === sessionId
+            ? { ...item, connectionStatus: "error" }
+            : item,
+        ),
+      );
+      toast.error("Failed to initialize the desktop", {
+        description:
+          "The Vercel Sandbox API or noVNC runtime could not be reached. Use Reconnect to try again.",
+      });
+    } finally {
+      connectingRef.current.delete(sessionId);
+    }
+  }, []);
+
+  const verifyDesktop = useCallback(
+    async (sessionId: string, showChecking: boolean) => {
+      if (
+        connectingRef.current.has(sessionId) ||
+        verifyingRef.current.has(sessionId)
+      ) {
+        return;
+      }
+      const session = sessionsRef.current.find((item) => item.id === sessionId);
+      if (!session?.sandboxId) return;
+      const sandboxId = session.sandboxId;
+      verifyingRef.current.add(sessionId);
+
+      if (showChecking) {
+        setSessions((previous) =>
+          previous.map((item) =>
+            item.id === sessionId && item.sandboxId === sandboxId
+              ? { ...item, connectionStatus: "checking" }
+              : item,
+          ),
+        );
+      }
+
+      try {
+        const isHealthy = await checkDesktopHealth(sandboxId);
+        const viewerIsConfirmed =
+          activeSessionIdRef.current !== sessionId ||
+          viewerReadyRef.current.has(sessionId);
+        setSessions((previous) =>
+          previous.map((item) =>
+            item.id === sessionId && item.sandboxId === sandboxId
+              ? {
+                  ...item,
+                  connectionStatus: isHealthy
+                    ? viewerIsConfirmed
+                      ? "ready"
+                      : item.connectionStatus === "reconnecting"
+                        ? "reconnecting"
+                        : "checking"
+                    : "offline",
+                }
+              : item,
+          ),
+        );
+
+        if (!isHealthy) {
+          setStreamUrls((previous) => {
+            if (!(sessionId in previous)) return previous;
+            const next = { ...previous };
+            delete next[sessionId];
+            return next;
+          });
+        }
+      } catch {
+        setSessions((previous) =>
+          previous.map((item) =>
+            item.id === sessionId && item.sandboxId === sandboxId
+              ? { ...item, connectionStatus: "offline" }
+              : item,
+          ),
+        );
+        setStreamUrls((previous) => {
+          if (!(sessionId in previous)) return previous;
+          const next = { ...previous };
+          delete next[sessionId];
+          return next;
+        });
+      } finally {
+        verifyingRef.current.delete(sessionId);
+      }
+    },
+    [],
+  );
+
+  const activeSession = useMemo(
+    () => sessions.find((session) => session.id === activeSessionId) ?? null,
+    [activeSessionId, sessions],
+  );
+
+  const activeConversation = useMemo(
+    () =>
+      activeSession?.conversations.find(
+        (conversation) =>
+          conversation.id === activeSession.activeConversationId,
+      ) ?? null,
+    [activeSession],
+  );
+
+  useEffect(() => {
+    if (!isHydrated || !activeSession) return;
+    if (
+      !streamUrls[activeSession.id] &&
+      (activeSession.connectionStatus === "uninitialized" ||
+        activeSession.connectionStatus === "offline")
+    ) {
+      void connectDesktop(activeSession.id);
+    }
+  }, [activeSession, connectDesktop, isHydrated, streamUrls]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const verifyKnownDesktops = () => {
+      for (const session of sessionsRef.current) {
+        if (
+          !session.sandboxId ||
+          session.connectionStatus === "creating" ||
+          connectingRef.current.has(session.id)
+        ) {
+          continue;
+        }
+        void verifyDesktop(session.id, false);
+      }
+    };
+    const verifyWhenVisible = () => {
+      if (document.visibilityState === "visible") verifyKnownDesktops();
+    };
+
+    const interval = window.setInterval(verifyKnownDesktops, 10_000);
+    window.addEventListener("focus", verifyKnownDesktops);
+    document.addEventListener("visibilitychange", verifyWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", verifyKnownDesktops);
+      document.removeEventListener("visibilitychange", verifyWhenVisible);
+    };
+  }, [isHydrated, verifyDesktop]);
+
+  useEffect(() => {
+    const killAllDesktops = () => {
+      persistSessions(sessionsRef.current);
+      for (const session of sessionsRef.current) {
+        if (!session.sandboxId) continue;
+        navigator.sendBeacon(
+          `/api/kill-desktop?sandboxId=${encodeURIComponent(session.sandboxId)}`,
+        );
+      }
+    };
+    window.addEventListener("pagehide", killAllDesktops);
+    return () => window.removeEventListener("pagehide", killAllDesktops);
+  }, []);
+
+  const createSession = useCallback((name: string) => {
+    if (agentStatus !== "idle") return;
+    const session = createEmptySession(name);
+    setSessions((previous) => [...previous, session]);
+    activeSessionIdRef.current = session.id;
+    setActiveSessionId(session.id);
+    setSelectedEventId(null);
+    setAgentStatus("idle");
+    setIsCreateDesktopOpen(false);
+    toast.success(`${name} created`);
+  }, [agentStatus]);
+
+  const requestCreateSession = useCallback(() => {
+    if (agentStatus !== "idle") return;
+    setIsCreateDesktopOpen(true);
+  }, [agentStatus]);
+
+  const closeCreateSession = useCallback(() => {
+    setIsCreateDesktopOpen(false);
+  }, []);
+
+  const createConversation = useCallback(() => {
+    if (agentStatus !== "idle" || !activeSessionIdRef.current) return;
+    const conversation = createEmptyConversation();
+    const sessionId = activeSessionIdRef.current;
+    setSessions((previous) =>
+      previous.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              activeConversationId: conversation.id,
+              conversations: [...session.conversations, conversation],
+              updatedAt: Date.now(),
+            }
+          : session,
+      ),
+    );
+    setSelectedEventId(null);
+    toast.success("New conversation opened in the current desktop");
+  }, [agentStatus]);
+
+  const selectConversation = useCallback(
+    (conversationId: string) => {
+      if (agentStatus !== "idle" || !activeSessionIdRef.current) {
+        toast.info("Stop the active run before switching conversations.");
+        return;
+      }
+      const sessionId = activeSessionIdRef.current;
+      const session = sessionsRef.current.find((item) => item.id === sessionId);
+      const conversation = session?.conversations.find(
+        (item) => item.id === conversationId,
+      );
+      if (!conversation) return;
+      setSessions((previous) =>
+        previous.map((item) =>
+          item.id === sessionId
+            ? { ...item, activeConversationId: conversationId }
+            : item,
+        ),
+      );
+      setSelectedEventId(conversation.events.at(-1)?.id ?? null);
+    },
+    [agentStatus],
+  );
+
+  const selectSession = useCallback(
+    (sessionId: string) => {
+      if (sessionId === activeSessionIdRef.current) return;
+      if (agentStatus !== "idle" && sessionId !== activeSessionIdRef.current) {
+        toast.info("Stop the active run before switching sessions.");
+        return;
+      }
+      const session = sessionsRef.current.find((item) => item.id === sessionId);
+      const conversation = session?.conversations.find(
+        (item) => item.id === session.activeConversationId,
+      );
+      viewerReadyRef.current.delete(sessionId);
+      activeSessionIdRef.current = sessionId;
+      setActiveSessionId(sessionId);
+      setSelectedEventId(conversation?.events.at(-1)?.id ?? null);
+      setAgentStatus("idle");
+      if (session?.sandboxId && streamUrlsRef.current[sessionId]) {
+        void verifyDesktop(sessionId, true);
+      }
+    },
+    [agentStatus, verifyDesktop],
+  );
+
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      if (
+        agentStatus !== "idle" &&
+        sessionId === activeSessionIdRef.current
+      ) {
+        toast.info("Stop the active run before deleting this session.");
+        return;
+      }
+
+      const currentSessions = sessionsRef.current;
+      const session = currentSessions.find((item) => item.id === sessionId);
+      if (session?.sandboxId) {
+        void fetch(
+          `/api/kill-desktop?sandboxId=${encodeURIComponent(session.sandboxId)}`,
+          { method: "POST" },
+        );
+      }
+
+      const remaining = currentSessions.filter((item) => item.id !== sessionId);
+      setSessions(remaining);
+      setStreamUrls((previous) => {
+        const next = { ...previous };
+        delete next[sessionId];
+        return next;
+      });
+
+      if (sessionId === activeSessionIdRef.current) {
+        if (remaining.length === 0) {
+          activeSessionIdRef.current = null;
+          setActiveSessionId(null);
+          setSelectedEventId(null);
+          setAgentStatus("idle");
+          setDeleteDesktopId(null);
+          toast.success("Desktop deleted");
+          return;
+        }
+        const removedIndex = currentSessions.findIndex(
+          (item) => item.id === sessionId,
+        );
+        const nextSession =
+          remaining[Math.min(removedIndex, remaining.length - 1)];
+        const nextConversation = nextSession.conversations.find(
+          (conversation) =>
+            conversation.id === nextSession.activeConversationId,
+        );
+        activeSessionIdRef.current = nextSession.id;
+        setActiveSessionId(nextSession.id);
+        setSelectedEventId(nextConversation?.events.at(-1)?.id ?? null);
+      }
+      setDeleteDesktopId(null);
+      toast.success("Desktop deleted");
+    },
+    [agentStatus],
+  );
+
+  const requestDeleteSession = useCallback(
+    (sessionId: string) => {
+      if (agentStatus !== "idle") {
+        toast.info("Stop the active run before deleting a desktop.");
+        return;
+      }
+      if (!sessionsRef.current.some((session) => session.id === sessionId)) {
+        return;
+      }
+      setDeleteDesktopId(sessionId);
+    },
+    [agentStatus],
+  );
+
+  const closeDeleteSession = useCallback(() => {
+    setDeleteDesktopId(null);
+  }, []);
+
+  const requestRenameSession = useCallback(
+    (sessionId: string) => {
+      if (agentStatus !== "idle") {
+        toast.info("Stop the active run before renaming a desktop.");
+        return;
+      }
+      if (!sessionsRef.current.some((session) => session.id === sessionId)) {
+        return;
+      }
+      setRenameDesktopId(sessionId);
+    },
+    [agentStatus],
+  );
+
+  const closeRenameSession = useCallback(() => {
+    setRenameDesktopId(null);
+  }, []);
+
+  const renameSession = useCallback(
+    (sessionId: string, name: string) => {
+      if (agentStatus !== "idle") return;
+      setSessions((previous) =>
+        previous.map((session) =>
+          session.id === sessionId
+            ? { ...session, title: name, updatedAt: Date.now() }
+            : session,
+        ),
+      );
+      setRenameDesktopId(null);
+      toast.success(`Desktop renamed to ${name}`);
+    },
+    [agentStatus],
+  );
+
+  const togglePinSession = useCallback(
+    (sessionId: string) => {
+      if (agentStatus !== "idle") return;
+      setSessions((previous) => {
+        const session = previous.find((item) => item.id === sessionId);
+        if (!session) return previous;
+        const pinned = !session.pinned;
+        const updated = {
+          ...session,
+          pinned,
+          updatedAt: Date.now(),
+        };
+        const remaining = previous.filter((item) => item.id !== sessionId);
+        const firstUnpinnedIndex = remaining.findIndex((item) => !item.pinned);
+        const insertionIndex =
+          firstUnpinnedIndex < 0 ? remaining.length : firstUnpinnedIndex;
+        const next = [...remaining];
+        next.splice(insertionIndex, 0, updated);
+        return next;
+      });
+      const wasPinned = sessionsRef.current.find(
+        (session) => session.id === sessionId,
+      )?.pinned;
+      toast.success(wasPinned ? "Desktop unpinned" : "Desktop pinned");
+    },
+    [agentStatus],
+  );
+
+  const reorderSessions = useCallback(
+    (
+      draggedSessionId: string,
+      targetSessionId: string,
+      position: "before" | "after",
+    ) => {
+      if (agentStatus !== "idle" || draggedSessionId === targetSessionId) return;
+      setSessions((previous) => {
+        const draggedIndex = previous.findIndex(
+          (session) => session.id === draggedSessionId,
+        );
+        if (draggedIndex < 0) return previous;
+        const next = [...previous];
+        const [draggedSession] = next.splice(draggedIndex, 1);
+        const targetIndex = next.findIndex(
+          (session) => session.id === targetSessionId,
+        );
+        if (targetIndex < 0) return previous;
+        const targetSession = next[targetIndex];
+        next.splice(
+          position === "after" ? targetIndex + 1 : targetIndex,
+          0,
+          draggedSession.pinned === targetSession.pinned
+            ? draggedSession
+            : {
+                ...draggedSession,
+                pinned: targetSession.pinned,
+                updatedAt: Date.now(),
+              },
+        );
+        return next;
+      });
+    },
+    [agentStatus],
+  );
+
+  const updateConversation = useCallback(
+    (
+      sessionId: string,
+      conversationId: string,
+      messages: UIMessage[],
+      events: AgentEvent[],
+    ) => {
+      setSessions((previous) =>
+        previous.map((session) => {
+          if (session.id !== sessionId) return session;
+          return {
+            ...session,
+            conversations: session.conversations.map((conversation) => {
+              if (conversation.id !== conversationId) return conversation;
+              const title =
+                conversation.title === "New conversation"
+                  ? firstUserMessageTitle(messages) ?? conversation.title
+                  : conversation.title;
+              return {
+                ...conversation,
+                title,
+                messages,
+                events,
+                updatedAt: Date.now(),
+              };
+            }),
+            updatedAt: Date.now(),
+          };
+        }),
+      );
+      if (
+        sessionId === activeSessionIdRef.current &&
+        sessionsRef.current.find((session) => session.id === sessionId)
+          ?.activeConversationId === conversationId
+      ) {
+        setSelectedEventId((current) => {
+          const latest = events.at(-1);
+          const currentEvent = events.find((event) => event.id === current);
+          if (!latest) return current;
+          if (!current || (latest.status === "pending" && currentEvent?.status !== "pending")) {
+            return latest.id;
+          }
+          return current;
+        });
+      }
+    },
+    [],
+  );
+
+  const updatePromptQueue = useCallback(
+    (
+      sessionId: string,
+      conversationId: string,
+      queuedPrompts: QueuedPrompt[],
+    ) => {
+      setSessions((previous) =>
+        previous.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                conversations: session.conversations.map((conversation) =>
+                  conversation.id === conversationId
+                    ? {
+                        ...conversation,
+                        queuedPrompts,
+                        updatedAt: Date.now(),
+                      }
+                    : conversation,
+                ),
+                updatedAt: Date.now(),
+              }
+            : session,
+        ),
+      );
+    },
+    [],
+  );
+
+  const updateModelConfig = useCallback(
+    (nextConfig: ClientModelConfig) => {
+      if (JSON.stringify(nextConfig) === JSON.stringify(modelConfig)) return;
+      const changedModel =
+        modelEndpointSignature(nextConfig) !==
+        modelEndpointSignature(modelConfig);
+
+      if (nextConfig.provider !== "anthropic") {
+        sessionStorage.setItem(
+          MODEL_SETTINGS_STORAGE_KEY,
+          JSON.stringify(nextConfig),
+        );
+      } else {
+        sessionStorage.removeItem(MODEL_SETTINGS_STORAGE_KEY);
+      }
+
+      setModelConfig(nextConfig);
+      if (changedModel && activeSessionIdRef.current) {
+        const sessionId = activeSessionIdRef.current;
+        setSessions((previous) =>
+          previous.map((session) => {
+            if (session.id !== sessionId) return session;
+            return {
+              ...session,
+              conversations: session.conversations.map((conversation) =>
+                conversation.id === session.activeConversationId
+                  ? {
+                      ...conversation,
+                      messages: [],
+                      events: [],
+                      queuedPrompts: [],
+                      revision: conversation.revision + 1,
+                      updatedAt: Date.now(),
+                    }
+                  : conversation,
+              ),
+              updatedAt: Date.now(),
+            };
+          }),
+        );
+        setSelectedEventId(null);
+      }
+    },
+    [modelConfig],
+  );
+
+  const refreshActiveDesktop = useCallback(() => {
+    if (!activeSessionIdRef.current) return;
+    if (verifyingRef.current.has(activeSessionIdRef.current)) return;
+    viewerReadyRef.current.delete(activeSessionIdRef.current);
+    setStreamUrls((previous) => {
+      const next = { ...previous };
+      delete next[activeSessionIdRef.current ?? ""];
+      return next;
+    });
+    void connectDesktop(activeSessionIdRef.current);
+  }, [connectDesktop]);
+
+  const handleViewerStateChange = useCallback(
+    (sessionId: string, state: VncViewerState) => {
+      if (sessionId !== activeSessionIdRef.current) return;
+      if (state === "ready") {
+        viewerReadyRef.current.add(sessionId);
+        void verifyDesktop(sessionId, false);
+        return;
+      }
+
+      viewerReadyRef.current.delete(sessionId);
+      setSessions((previous) =>
+        previous.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                connectionStatus:
+                  state === "offline"
+                    ? "offline"
+                    : state === "reconnecting"
+                      ? "reconnecting"
+                      : "checking",
+              }
+            : session,
+        ),
+      );
+
+      if (state === "offline") {
+        setStreamUrls((previous) => {
+          if (!(sessionId in previous)) return previous;
+          const next = { ...previous };
+          delete next[sessionId];
+          return next;
+        });
+      }
+    },
+    [verifyDesktop],
+  );
+
+  const activeEvent = useMemo(() => {
+    if (!activeConversation) return null;
+    return (
+      activeConversation.events.find((event) => event.id === selectedEventId) ??
+      activeConversation.events.at(-1) ??
+      null
+    );
+  }, [activeConversation, selectedEventId]);
+
+  const activityEvent = useMemo(
+    () =>
+      activeConversation?.events.findLast(
+        (event) => event.status === "pending",
+      ) ??
+      activeConversation?.events.at(-1) ??
+      null,
+    [activeConversation?.events],
+  );
+
+  const deleteTargetSession = useMemo(
+    () =>
+      sessions.find((session) => session.id === deleteDesktopId) ?? null,
+    [deleteDesktopId, sessions],
+  );
+
+  const renameTargetSession = useMemo(
+    () =>
+      sessions.find((session) => session.id === renameDesktopId) ?? null,
+    [renameDesktopId, sessions],
+  );
+
+  const settingsControl = useMemo(
+    () => (
+      <DashboardSettings
+        config={modelConfig}
+        modelDisabled={agentStatus !== "idle"}
+        trigger="rail"
+        onConfigChange={updateModelConfig}
+      />
+    ),
+    [agentStatus, modelConfig, updateModelConfig],
+  );
+
+  if (!isHydrated) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-black text-zinc-400">
+        <div className="flex items-center gap-2 text-xs">
+          <Radio className="size-4 animate-pulse text-violet-400" />
+          Restoring agent workspace…
         </div>
       </div>
+    );
+  }
+
+  const appHeader = (
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-100 bg-surface px-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Bot className="size-3.5" />
+        </span>
+        <span className="hidden text-sm font-semibold tracking-tight min-[390px]:inline">
+          Agent Desk
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="hidden sm:block">
+          <StatusIndicator status={agentStatus} />
+        </div>
+
+        {!isDesktop ? (
+          <DashboardSettings
+            config={modelConfig}
+            modelDisabled={agentStatus !== "idle"}
+            trigger="icon"
+            onConfigChange={updateModelConfig}
+          />
+        ) : null}
+      </div>
+    </header>
+  );
+
+  const desktopDialogs = (
+    <>
+      <CreateDesktopDialog
+        open={isCreateDesktopOpen}
+        existingNames={sessions.map((session) => session.title)}
+        onCancel={closeCreateSession}
+        onCreate={createSession}
+      />
+      <DeleteDesktopDialog
+        session={deleteTargetSession}
+        onCancel={closeDeleteSession}
+        onConfirm={deleteSession}
+      />
+      <RenameDesktopDialog
+        session={renameTargetSession}
+        existingNames={sessions
+          .filter((session) => session.id !== renameDesktopId)
+          .map((session) => session.title)}
+        onCancel={closeRenameSession}
+        onRename={renameSession}
+      />
+    </>
+  );
+
+  if (!activeSession || !activeConversation) {
+    const emptyState = (
+      <section className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+        <span className="flex size-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500">
+          <Monitor className="size-4.5" />
+        </span>
+        <h2 className="mt-4 text-sm font-semibold text-zinc-900">
+          No desktops yet
+        </h2>
+        <p className="mt-1 max-w-xs text-xs leading-5 text-zinc-500">
+          Create an isolated desktop when you are ready to start a new agent
+          workspace.
+        </p>
+        <button
+          type="button"
+          onClick={requestCreateSession}
+          className="mt-4 flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-85"
+        >
+          <Plus className="size-3.5" />
+          Create desktop
+        </button>
+      </section>
+    );
+
+    return (
+      <div className="flex h-dvh flex-col overflow-hidden bg-surface text-zinc-900">
+        {appHeader}
+        <main className="flex min-h-0 flex-1">
+          {isDesktop ? (
+            <>
+              <SessionSidebar
+                sessions={sessions}
+                activeSessionId={null}
+                disabled={false}
+                settingsControl={settingsControl}
+                onCreate={requestCreateSession}
+                onSelect={selectSession}
+                onRequestDelete={requestDeleteSession}
+                onRequestRename={requestRenameSession}
+                onReorder={reorderSessions}
+                onTogglePin={togglePinSession}
+              />
+              {emptyState}
+            </>
+          ) : (
+            emptyState
+          )}
+        </main>
+        {desktopDialogs}
+      </div>
+    );
+  }
+
+  const chatWorkspace = (
+    <ChatWorkspace
+      key={`${activeSession.id}-${activeConversation.id}-${modelEndpointSignature(modelConfig)}`}
+      sessionId={activeSession.id}
+      conversationId={activeConversation.id}
+      conversationRevision={activeConversation.revision}
+      conversations={activeSession.conversations}
+      sandboxId={activeSession.sandboxId}
+      initialMessages={activeConversation.messages}
+      initialEvents={activeConversation.events}
+      initialQueuedPrompts={activeConversation.queuedPrompts}
+      modelConfig={modelConfig}
+      connectionReady={activeSession.connectionStatus === "ready"}
+      connectionStatus={activeSession.connectionStatus}
+      selectedEventId={selectedEventId}
+      onCreateConversation={createConversation}
+      onSelectConversation={selectConversation}
+      onSelectEvent={setSelectedEventId}
+      onConversationChange={updateConversation}
+      onQueueChange={updatePromptQueue}
+      onStatusChange={setAgentStatus}
+    />
+  );
+
+  const vncViewer = (
+    <VncViewer
+      sessionId={activeSession.id}
+      sessionTitle={activeSession.title}
+      streamUrl={streamUrls[activeSession.id] ?? null}
+      sandboxId={activeSession.sandboxId}
+      generation={activeSession.generation}
+      connectionStatus={activeSession.connectionStatus}
+      agentStatus={agentStatus}
+      activityEvent={activityEvent}
+      displayMode={vncDisplayMode}
+      showHeader={isDesktop}
+      onDisplayModeChange={setVncDisplayMode}
+      onViewerStateChange={handleViewerStateChange}
+      onRefresh={refreshActiveDesktop}
+    />
+  );
+
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-surface text-zinc-900">
+      {appHeader}
+
+      {isDesktop ? (
+        <main className="min-h-0 flex-1">
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={47} minSize={34} maxSize={66}>
+              <div className="flex h-full min-w-0">
+                <SessionSidebar
+                  sessions={sessions}
+                  activeSessionId={activeSession.id}
+                  disabled={agentStatus !== "idle"}
+                  settingsControl={settingsControl}
+                  onCreate={requestCreateSession}
+                  onSelect={selectSession}
+                  onRequestDelete={requestDeleteSession}
+                  onRequestRename={requestRenameSession}
+                  onReorder={reorderSessions}
+                  onTogglePin={togglePinSession}
+                />
+                {chatWorkspace}
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle className="bg-zinc-100" />
+
+            <ResizablePanel defaultSize={53} minSize={34}>
+              <div className="flex h-full min-w-0 flex-col">
+                {vncViewer}
+                <ToolInspector
+                  event={activeEvent}
+                  fill={vncDisplayMode !== "embedded"}
+                />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </main>
+      ) : (
+        <main
+          className={cn(
+            "grid min-h-0 flex-1 bg-zinc-100",
+            vncDisplayMode === "embedded"
+              ? "grid-rows-[46%_54%]"
+              : "grid-rows-[40px_minmax(0,1fr)]",
+          )}
+        >
+          <section
+            className={cn(
+              "flex min-h-0 flex-col border-b border-zinc-200",
+              vncDisplayMode === "embedded"
+                ? "overflow-hidden"
+                : "overflow-visible",
+            )}
+          >
+            <MobileDesktopSwitcher
+              sessions={sessions}
+              activeSessionId={activeSession.id}
+              disabled={agentStatus !== "idle"}
+              displayMode={vncDisplayMode}
+              onCreate={requestCreateSession}
+              onDisplayModeChange={setVncDisplayMode}
+              onRefresh={refreshActiveDesktop}
+              onSelect={selectSession}
+            />
+            <div className="flex min-h-0 flex-1">{vncViewer}</div>
+          </section>
+          <section className="flex min-h-0 overflow-hidden bg-surface">
+            {chatWorkspace}
+          </section>
+        </main>
+      )}
+      {desktopDialogs}
     </div>
+  );
+}
+
+function StatusIndicator({ status }: { status: AgentStatus }) {
+  return (
+    <span className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-medium capitalize text-zinc-600">
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          status === "idle" && "bg-emerald-500",
+          status === "thinking" && "animate-pulse bg-violet-500",
+          status === "executing" && "animate-pulse bg-amber-500",
+        )}
+      />
+      {status}
+    </span>
   );
 }

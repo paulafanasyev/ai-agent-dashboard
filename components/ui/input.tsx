@@ -1,3 +1,8 @@
+/**
+ * File: components/ui/input.tsx
+ * Purpose: Define the shared styled HTML input primitive.
+ * Problem solved: Keeps form fields visually and behaviorally consistent across configuration and chat flows.
+ */
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

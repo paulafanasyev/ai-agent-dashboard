@@ -1,57 +1,41 @@
-import { ArrowUpRight } from "lucide-react";
+/**
+ * File: components/prompt-suggestions.tsx
+ * Purpose: Offer editable prompt presets for common computer-use tasks.
+ * Problem solved: Helps users discover agent capabilities while keeping final review and submission under user control.
+ */
 import { Button } from "./ui/button";
 
 const suggestions = [
   {
-    text: "Get the latest Vercel blog post",
-    prompt: "Go to vercel.com/blog and get the latest post",
-  },
-  // {
-  //   text: "search google for cute dogs",
-  //   prompt: "Launch browser and search Google for labradoodle puppies. Show me images.",
-  // },
-  {
-    text: "Create a new text file",
+    text: "Create notes.txt",
     prompt: "Open a text editor and create a new file called notes.txt and write 'we are so back!'",
   },
-  // {
-  //   text: "Check system memory usage",
-  //   prompt: "Run the top command to show system resource usage",
-  // },
   {
-    text: "Get the latest rauchg tweet",
-    prompt: "Go to twitter.com/rauchg and get the latest tweet",
+    text: "Inspect this desktop",
+    prompt: "Capture a screenshot of the current desktop and tell me what you see",
   },
-  // {
-  //   text: "What do you see",
-  //   prompt:
-  //     "Capture a screenshot of the current screen and tell me what you see",
-  // },
 ];
 
 export const PromptSuggestions = ({
-  submitPrompt,
+  onSelectPrompt,
   disabled,
 }: {
-  submitPrompt: (prompt: string) => void;
+  onSelectPrompt: (prompt: string) => void;
   disabled: boolean;
 }) => {
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4">
+    <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
       {suggestions.map((suggestion, index) => (
         <Button
           key={index}
+          type="button"
           variant="pill"
           size="pill"
-          onClick={() => submitPrompt(suggestion.prompt)}
+          onClick={() => onSelectPrompt(suggestion.prompt)}
           disabled={disabled}
+          aria-label={`Use preset: ${suggestion.text}`}
         >
-          <span>
-            <span className="text-black text-sm">
-              {suggestion.text.toLowerCase()}
-            </span>
-          </span>
-          <ArrowUpRight className="ml-1 h-2 w-2 sm:h-3 sm:w-3 text-zinc-500 group-hover:opacity-70" />
+          <span className="text-[11px] text-zinc-600">{suggestion.text}</span>
         </Button>
       ))}
     </div>

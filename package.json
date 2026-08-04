@@ -1,15 +1,22 @@
 {
-  "name": "ai-sdk-computer-use",
+  "name": "ai-agent-dashboard",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm lint && pnpm typecheck && pnpm build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.1.15",
+    "@ai-sdk/openai": "1.1.15",
     "@ai-sdk/react": "^1.1.21",
     "@vercel/sandbox": "latest",
     "@radix-ui/react-label": "^2.1.2",

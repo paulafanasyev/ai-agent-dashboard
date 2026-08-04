@@ -1,8 +1,15 @@
+/**
+ * File: app/layout.tsx
+ * Purpose: Configure the root document, metadata, fonts, analytics, global tooltips, and notifications.
+ * Problem solved: Gives every route a consistent, discoverable application shell and document-level configuration.
+ */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ButtonTooltipProvider } from "@/components/button-tooltip-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { Analytics } from "@vercel/analytics/react"
+import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +22,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI SDK Computer Use Demo",
-  description: "A Next.js app that uses the AI SDK and Anthropic to create a computer using agent.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  ),
+  title: "AI Agent Dashboard",
+  description:
+    "An observable computer-use agent dashboard powered by Anthropic and isolated desktop runtimes.",
 };
 
 export default function RootLayout({
@@ -25,13 +36,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
-        <Toaster />
-        <Analytics />
+        <ThemeProvider>
+          {children}
+          <ButtonTooltipProvider />
+          <Toaster />
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   );

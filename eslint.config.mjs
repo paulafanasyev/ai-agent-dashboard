@@ -1,3 +1,8 @@
+/**
+ * File: eslint.config.mjs
+ * Purpose: Configure ESLint for the Next.js and TypeScript codebase.
+ * Problem solved: Enforces consistent correctness and framework rules during local and CI validation.
+ */
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { FlatCompat } from "@eslint/eslintrc";

@@ -1,3 +1,8 @@
+/**
+ * File: next.config.ts
+ * Purpose: Configure Next.js runtime and response headers.
+ * Problem solved: Applies project-wide framework behavior and security policy from one location.
+ */
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {

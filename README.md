@@ -1,14 +1,23 @@
-<a href="https://ai-sdk-computer-use.vercel.app">
-  <h1 align="center">AI SDK Computer Use Demo</h1>
-</a>
+<!--
+File: README.md
+Purpose: Explain the product, architecture, setup, deployment, and validation workflow.
+Problem solved: Gives reviewers and contributors one reliable entry point for understanding and running the project.
+-->
+
+Author: Cheng LIANG(Ray)
+
+# AI Agent Dashboard
 
 <p align="center">
-  An open-source AI chatbot demonstrating computer use capabilities with Anthropic Claude Sonnet 4.5, Vercel Sandboxes, and the AI SDK by Vercel.
+  An observable, session-aware computer-use agent dashboard built from Vercel Labs' AI SDK Computer Use demo.
 </p>
+
+> Bootstrap status: the upstream Vercel Sandbox execution path is preserved and verified. Dashboard observability, session isolation, and the E2B runtime adapter will be added in reviewable milestones.
 
 <p align="center">
   <a href="#features"><strong>Features</strong></a> ·
   <a href="#how-it-works"><strong>How It Works</strong></a> ·
+  <a href="repowiki.md"><strong>Repository Wiki</strong></a> ·
   <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
   <a href="#running-locally"><strong>Running Locally</strong></a>
 </p>
@@ -17,12 +26,43 @@
 ## Features
 
 - Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
-- Anthropic Claude Sonnet 4.5 with [computer use](https://sdk.vercel.ai/docs/guides/computer-use) and bash tool capabilities.
+- Anthropic Claude, Kimi K3 BYOK, or a custom OpenAI-compatible model with computer-use and bash tool capabilities.
+- Browser-side BYOK configuration with Kimi and custom presets; the key is kept in tab-scoped `sessionStorage`.
+- Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
+- Mobile stacked workspace with the live VNC desktop above the always-available conversation composer and desktop switching at the top.
+- One-click VNC minimization and draggable, viewport-constrained picture-in-picture without recreating the remote desktop iframe.
+- Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a collapsible debug timeline.
+- Copy controls on user and agent text with inline confirmation and toast feedback.
+- Global hover and keyboard-focus tooltips that explain every button from its accessible name or visible label.
+- Visible-first browser automation plus a live VNC activity overlay that distinguishes desktop actions from background commands.
+- Multiple desktop sessions, each with reusable VNC state and switchable local conversation history.
+- Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
+- Named desktop creation plus persistent pinning, renaming, drag ordering, hover details, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
+- Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
+- Transient Vercel Sandbox lookup failures are retried, while unrecoverable startup errors remain synchronized across the desktop viewer and activity feedback.
+- Persistent per-conversation FIFO task queues: prompts entered before Desktop readiness or during an active run execute automatically when safe.
+- Frame-coalesced scrolling and dragging, throttled live-state projection, idle-time persistence, lazy screenshot decoding, and a memoized VNC viewer isolated from token-by-token chat rendering.
+- Five persistent, neutral-dark interface themes with researched Vercel, Vue, Codex, Xcode, and GitHub accent and text palettes, plus live preview in Settings.
 - Remote desktop environment running in a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) with Chrome, a window manager, and VNC streaming.
 - [shadcn/ui](https://ui.shadcn.com/) components for a modern, responsive UI powered by [Tailwind CSS](https://tailwindcss.com).
 - Built with the latest [Next.js](https://nextjs.org) App Router.
 
+## Upstream Baseline
+
+This repository preserves the Git history from
+[`vercel-labs/ai-sdk-computer-use`](https://github.com/vercel-labs/ai-sdk-computer-use).
+The imported baseline is commit `ed103da`; the original repository is configured
+locally as the `upstream` remote.
+
+The assignment appendix names E2B as the target desktop provider while the
+starter project uses Vercel Sandbox. The decision and migration boundary are
+recorded in [ADR 001](docs/adr/001-desktop-runtime-strategy.md).
+
 ## How It Works
+
+For a detailed explanation of module boundaries, runtime flows, state ownership,
+security decisions, and extension points, see the
+[Repository Architecture Wiki](repowiki.md).
 
 The app spins up a Vercel Sandbox from a pre-built snapshot that includes:
 
@@ -32,22 +72,20 @@ The app spins up a Vercel Sandbox from a pre-built snapshot that includes:
 - **Google Chrome** — auto-launched so the AI agent has a browser ready
 - **xdotool + ImageMagick** — for mouse/keyboard control and screenshots
 
-When a user sends a message, Claude uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. The noVNC stream is displayed in a resizable iframe alongside the chat.
+When a user sends a message, the selected model uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. Web, weather, search, and other current-information requests are deterministically routed to `computer` for the first step, so the agent must inspect the visible browser instead of answering from memory or using a hidden HTTP command. Claude uses Anthropic's native computer-use tools; Kimi K3 uses provider-neutral function tools and receives screenshots as multimodal input. Tool invocations are normalized into discriminated event records that power the inline cards, debug timeline, metrics, and expanded inspector. The memoized noVNC viewer is displayed in a horizontally resizable panel and receives no chat-message props.
+
+Each browser-local desktop session owns one sandbox ID and runtime generation, plus multiple conversations with independent messages, event metadata, and queued prompts. Starting or switching a conversation preserves the desktop state; creating a new desktop session allocates a separate sandbox. The composer remains available while the desktop starts or the agent runs: follow-ups enter a visible FIFO queue and dispatch only after the viewer and runtime are ready. Full screenshot payloads are deliberately redacted before `localStorage` persistence to avoid exhausting the browser storage quota.
 
 ### Architecture
 
 ```
-User ↔ Next.js Chat UI ↔ AI SDK ↔ Claude Sonnet 4.5
-                                        ↓
-                                  Vercel Sandbox
-                              ┌─────────────────────┐
-                              │  Xvnc (:99)         │
-                              │  openbox             │
-                              │  Chrome              │
-                              │  websockify → noVNC  │
-                              └─────────────────────┘
-                                        ↓
-                              noVNC iframe in browser
+Desktop session ──→ Conversations ──→ AI SDK ──→ Claude / Kimi K3
+     │                    │                            │
+     │                    └─→ typed event projection ←┤
+     ├── localStorage                 │                ↓
+     │                                ├─ inline cards  computer/bash tools
+     │                                └─ inspector            │
+     └── sandbox id ──→ memoized VNC viewer ←── Vercel Sandbox
 ```
 
 ## Deploy Your Own
@@ -62,7 +100,7 @@ You can deploy your own version to Vercel by clicking the button below:
 
 - Node.js 18+
 - A [Vercel](https://vercel.com) account (for Sandbox access)
-- An [Anthropic API key](https://console.anthropic.com/)
+- An [Anthropic API key](https://console.anthropic.com/) for the project default, or a Kimi API key supplied through BYOK
 
 ### 1. Install dependencies
 
@@ -104,6 +142,14 @@ SANDBOX_SNAPSHOT_ID=snap_xxxxxxxxxxxxx
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+To use an Anthropic-compatible gateway, configure its Messages API prefix and
+the model ID exposed by that gateway:
+
+```
+ANTHROPIC_BASE_URL=https://www.packyapi.ai/v1
+ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
 ### 5. Start the dev server
 
 ```bash
@@ -112,12 +158,37 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) to use the computer use agent.
 
+### Use BYOK
+
+Open **Settings** at the bottom-left of the desktop rail, select **BYOK**, then
+choose Kimi or Custom. Valid changes are saved automatically; there is no
+separate save action.
+
+- **Kimi Code** uses `https://api.kimi.com/coding/v1`; its model ID is configurable and defaults to `k3`.
+- **Custom** accepts a public HTTPS OpenAI-compatible Base URL and model ID.
+
+The key is stored only in the current tab's `sessionStorage`, sent to this app's
+`/api/chat` route for server-side forwarding, and removed when the tab is closed.
+Only enter a personal key on a deployment whose source and operator you trust.
+
+### Quality checks
+
+```bash
+pnpm check
+```
+
+This runs ESLint, TypeScript validation, and a production build—the same checks
+used in CI.
+
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key for Claude |
+| `ANTHROPIC_BASE_URL` | No | Anthropic-compatible Messages API prefix; defaults to the official Anthropic API |
+| `ANTHROPIC_MODEL` | No | Provider model ID; defaults to the starter project's Claude Sonnet 4.5 model |
 | `SANDBOX_SNAPSHOT_ID` | Yes | Vercel Sandbox snapshot with the desktop environment |
+| `NEXT_PUBLIC_APP_URL` | No | Canonical deployment URL used for social metadata; defaults to `http://localhost:3000` |
 | `VERCEL_OIDC_TOKEN` | Yes* | Auto-set by `vercel env pull` for Sandbox auth |
 | `VERCEL_TOKEN` | Alt* | Alternative to OIDC — a Vercel personal access token |
 | `VERCEL_TEAM_ID` | Alt* | Required with `VERCEL_TOKEN` |

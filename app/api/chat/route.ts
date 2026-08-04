@@ -1,47 +1,141 @@
-import { anthropic } from "@ai-sdk/anthropic";
-import { streamText, UIMessage } from "ai";
-import { killDesktop } from "@/lib/sandbox/utils";
+/**
+ * File: app/api/chat/route.ts
+ * Purpose: Stream model responses and dispatch computer-use tools.
+ * Problem solved: Unifies Claude, Kimi, and custom BYOK requests behind one validated API endpoint.
+ */
+import { streamText, type ToolSet, type UIMessage } from "ai";
+import { z } from "zod";
+import {
+  anthropicModelId,
+  anthropicProvider,
+} from "@/lib/ai/anthropic";
+import {
+  createKimiModel,
+  createOpenAICompatibleModel,
+} from "@/lib/ai/kimi";
+import { shouldStartWithVisibleComputer } from "@/lib/ai/browser-routing";
+import { isSafeCustomBaseUrl } from "@/lib/ai/model-config";
+import { checkDesktopHealth } from "@/lib/sandbox/utils";
 import { bashTool, computerTool } from "@/lib/sandbox/tool";
+import {
+  genericBashTool,
+  genericComputerTool,
+} from "@/lib/sandbox/generic-tool";
 import { prunedMessages } from "@/lib/utils";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 300;
 
+const modelConfigSchema = z.discriminatedUnion("provider", [
+  z.object({ provider: z.literal("anthropic") }),
+  z.object({
+    provider: z.literal("kimi"),
+    apiKey: z.string().trim().min(8).max(512),
+    modelId: z.string().trim().min(1).max(200),
+    reasoningEffort: z.enum(["low", "high", "max"]),
+  }),
+  z.object({
+    provider: z.literal("custom"),
+    apiKey: z.string().trim().min(8).max(512),
+    baseUrl: z.string().trim().max(2048).refine(isSafeCustomBaseUrl),
+    modelId: z.string().trim().min(1).max(200),
+  }),
+]);
+
+const chatRequestSchema = z.object({
+  messages: z.custom<UIMessage[]>((value) => Array.isArray(value)),
+  sandboxId: z.string().min(1),
+  desktopReady: z.literal(true),
+  modelConfig: modelConfigSchema.default({ provider: "anthropic" }),
+});
+
 export async function POST(req: Request) {
-  const { messages, sandboxId }: { messages: UIMessage[]; sandboxId: string } =
-    await req.json();
+  let sandboxId: string | undefined;
+
   try {
+    const request = chatRequestSchema.parse(await req.json());
+    sandboxId = request.sandboxId;
+    const { messages, modelConfig } = request;
+    if (!(await checkDesktopHealth(sandboxId))) {
+      return new Response(
+        JSON.stringify({ error: "Desktop is not ready. The task remains queued." }),
+        {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    const usesGenericTools = modelConfig.provider !== "anthropic";
+    const mustStartWithComputer = shouldStartWithVisibleComputer(messages);
+
+    const model =
+      modelConfig.provider === "kimi"
+        ? createKimiModel(modelConfig.apiKey, modelConfig.modelId)
+        : modelConfig.provider === "custom"
+          ? createOpenAICompatibleModel({
+              apiKey: modelConfig.apiKey,
+              baseUrl: modelConfig.baseUrl,
+              modelId: modelConfig.modelId,
+              providerName: "custom",
+            })
+          : anthropicProvider(anthropicModelId);
+
+    const tools: ToolSet = usesGenericTools
+      ? {
+          computer: genericComputerTool(sandboxId),
+          bash: genericBashTool(sandboxId),
+        }
+      : {
+          computer: computerTool(sandboxId),
+          bash: bashTool(sandboxId),
+        };
+
     const result = streamText({
-      model: anthropic("claude-sonnet-4-5-20250929"), // Using Sonnet for computer use
+      model,
+      temperature: modelConfig.provider === "kimi" ? 1 : undefined,
       system:
-        "You are a helpful assistant with access to a computer. " +
-        "Use the computer tool to help the user with their requests. " +
-        "Use the bash tool to execute commands on the computer. You can create files and folders using the bash tool. Always prefer the bash tool where it is viable for the task. " +
+        "You are a helpful assistant operating an observable remote desktop. " +
+        "For every task involving a website, browser navigation, web search, page content, forms, or any visual interface, you MUST use the computer tool to operate the visible Chrome window. Take a screenshot before the first visual action and after navigation or any major visual change. Never replace visible browser interaction with curl, wget, a headless browser, or a Bash-based web request. " +
+        "Weather, forecasts, news, prices, latest information, and requests to look something up are web tasks. Never answer them from memory. For the canonical Dubai weather task, visibly open a reliable weather or search website in Chrome, read the current result from the page, and only then summarize it for the user. " +
+        "Use the bash tool only for background work that has no meaningful visual interaction, such as filesystem operations, source inspection, or running local commands. " +
         "Be sure to advise the user when waiting is necessary. " +
         "If the browser opens with a setup wizard, YOU MUST IGNORE IT and move straight to the next step (e.g. input the url in the search bar).",
       messages: prunedMessages(messages),
-      tools: { computer: computerTool(sandboxId), bash: bashTool(sandboxId) },
-      providerOptions: {
-        anthropic: { cacheControl: { type: "ephemeral" } },
-      },
+      tools,
+      toolChoice: mustStartWithComputer
+        ? { type: "tool", toolName: "computer" }
+        : "auto",
+      providerOptions: modelConfig.provider === "kimi"
+        ? { openai: { reasoningEffort: modelConfig.reasoningEffort } }
+        : modelConfig.provider === "anthropic"
+          ? { anthropic: { cacheControl: { type: "ephemeral" } } }
+          : undefined,
     });
 
     // Create response stream
     const response = result.toDataStreamResponse({
-      // @ts-expect-error eheljfe
       getErrorMessage(error) {
         console.error(error);
-        return error;
+        return error instanceof Error
+          ? error.message
+          : "An unexpected error occurred.";
       },
     });
 
     return response;
   } catch (error) {
     console.error("Chat API error:", error);
-    await killDesktop(sandboxId); // Force cleanup on error
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    const isInvalidRequest = error instanceof z.ZodError;
+    return new Response(
+      JSON.stringify({
+        error: isInvalidRequest
+          ? "Invalid chat configuration"
+          : "Internal Server Error",
+      }),
+      {
+        status: isInvalidRequest ? 400 : 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 }

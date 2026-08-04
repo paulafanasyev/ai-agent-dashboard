@@ -1,3 +1,8 @@
+/**
+ * File: lib/utils.ts
+ * Purpose: Provide shared class merging and safe message-pruning utilities.
+ * Problem solved: Removes duplicated presentation helpers and prevents unsupported tool content from being resent.
+ */
 import { UIMessage } from "ai";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";

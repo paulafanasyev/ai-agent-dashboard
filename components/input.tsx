@@ -1,41 +1,58 @@
+/**
+ * File: components/input.tsx
+ * Purpose: Render the chat composer and its submit or stop control.
+ * Problem solved: Keeps follow-up input available while tasks wait for the desktop or an active run.
+ */
 import { ArrowUp } from "lucide-react";
 import { Input as ShadcnInput } from "./ui/input";
 
 interface InputProps {
   input: string;
+  inputRef?: React.Ref<HTMLInputElement>;
   handleInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isInitializing: boolean;
   isLoading: boolean;
-  status: string;
+  hasQueuedPrompts: boolean;
   stop: () => void;
 }
 
 export const Input = ({
   input,
+  inputRef,
   handleInputChange,
   isInitializing,
   isLoading,
-  status,
+  hasQueuedPrompts,
   stop,
 }: InputProps) => {
+  const willQueue = isInitializing || isLoading || hasQueuedPrompts;
+  const showStop = isLoading && !input.trim();
+
   return (
     <div className="relative w-full">
       <ShadcnInput
-        className="bg-secondary py-6 w-full rounded-xl pr-12"
+        ref={inputRef}
+        className="h-11 w-full rounded-xl border-transparent bg-zinc-100 py-3 pl-4 pr-12 text-sm shadow-none transition-colors focus-visible:border-zinc-300 focus-visible:bg-surface"
         value={input}
         autoFocus
-        placeholder={"Tell me what to do..."}
+        placeholder={
+          isInitializing
+            ? "Queue a task while Desktop starts..."
+            : isLoading
+              ? "Add a follow-up..."
+              : "Give the agent a task..."
+        }
         onChange={handleInputChange}
-        disabled={isLoading || isInitializing}
       />
-      {status === "streaming" || status === "submitted" ? (
+      {showStop ? (
         <button
           type="button"
           onClick={stop}
-          className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 bg-black hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed transition-colors"
+          aria-label="Stop current task"
+          className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
         >
           <div className="animate-spin h-4 w-4">
-            <svg className="h-4 w-4 text-white" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" viewBox="0 0 24 24">
               <circle
                 className="opacity-25"
                 cx="12"
@@ -56,10 +73,12 @@ export const Input = ({
       ) : (
         <button
           type="submit"
-          disabled={isLoading || !input.trim() || isInitializing}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 bg-black hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed transition-colors"
+          disabled={!input.trim()}
+          aria-label={willQueue ? "Queue task" : "Send task"}
+          title={willQueue ? "Add to queue" : "Send task"}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
         >
-          <ArrowUp className="h-4 w-4 text-white" />
+          <ArrowUp className="h-4 w-4" />
         </button>
       )}
     </div>

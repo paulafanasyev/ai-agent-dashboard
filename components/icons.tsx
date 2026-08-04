@@ -1,3 +1,8 @@
+/**
+ * File: components/icons.tsx
+ * Purpose: Provide reusable branded and utility SVG icon components.
+ * Problem solved: Centralizes custom icon markup instead of duplicating it across views.
+ */
 import Link from "next/link";
 
 export const BotIcon = () => {

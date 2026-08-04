@@ -1,14 +1,16 @@
+/**
+ * File: components/ui/sonner.tsx
+ * Purpose: Configure the shared toast notification renderer.
+ * Problem solved: Presents asynchronous success and failure feedback in a consistent theme.
+ */
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       toastOptions={{
         classNames: {

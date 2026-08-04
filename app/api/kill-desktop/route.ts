@@ -1,3 +1,8 @@
+/**
+ * File: app/api/kill-desktop/route.ts
+ * Purpose: Stop a remote desktop sandbox through an HTTP endpoint.
+ * Problem solved: Releases session compute safely during deletion, unload, or cleanup.
+ */
 import { killDesktop } from "@/lib/sandbox/utils";
 
 // Common handler for both GET and POST requests

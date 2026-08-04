@@ -1,4 +1,8 @@
 /**
+ * File: lib/sandbox/create-snapshot.ts
+ * Purpose: Build the reusable Vercel Sandbox image used by desktop sessions.
+ * Problem solved: Preinstalls browser, window manager, VNC, and automation dependencies for fast startup.
+ *
  * One-time script to create a Vercel Sandbox snapshot with a full desktop environment.
  *
  * Run with: npx tsx lib/sandbox/create-snapshot.ts
