@@ -141,6 +141,84 @@ export function useDashboardSessionActions({
     ],
   );
 
+  /** Renames one Conversation without changing its messages, events, or active identity. */
+  const renameConversation = useCallback(
+    (conversationId: string, name: string) => {
+      if (agentStatus !== "idle" || !activeSessionIdRef.current) {
+        toast.info("Stop the active run before editing conversations.");
+        return;
+      }
+      const sessionId = activeSessionIdRef.current;
+      setSessions((previous) =>
+        previous.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                conversations: session.conversations.map((conversation) =>
+                  conversation.id === conversationId
+                    ? { ...conversation, title: name, updatedAt: Date.now() }
+                    : conversation,
+                ),
+                updatedAt: Date.now(),
+              }
+            : session,
+        ),
+      );
+      toast.success(`Conversation renamed to ${name}`);
+    },
+    [activeSessionIdRef, agentStatus, setSessions],
+  );
+
+  /** Deletes one Conversation and selects a neighbor, preserving one empty Conversation minimum. */
+  const deleteConversation = useCallback(
+    (conversationId: string) => {
+      if (agentStatus !== "idle" || !activeSessionIdRef.current) {
+        toast.info("Stop the active run before deleting conversations.");
+        return;
+      }
+      const sessionId = activeSessionIdRef.current;
+      const session = sessionsRef.current.find((item) => item.id === sessionId);
+      const deletedIndex =
+        session?.conversations.findIndex((item) => item.id === conversationId) ??
+        -1;
+      if (!session || deletedIndex < 0) return;
+
+      let remaining = session.conversations.filter(
+        (conversation) => conversation.id !== conversationId,
+      );
+      if (remaining.length === 0) remaining = [createEmptyConversation()];
+      const nextConversation =
+        remaining[Math.min(deletedIndex, remaining.length - 1)];
+      const deletingActive = session.activeConversationId === conversationId;
+
+      setSessions((previous) =>
+        previous.map((item) =>
+          item.id === sessionId
+            ? {
+                ...item,
+                activeConversationId: deletingActive
+                  ? nextConversation.id
+                  : item.activeConversationId,
+                conversations: remaining,
+                updatedAt: Date.now(),
+              }
+            : item,
+        ),
+      );
+      if (deletingActive) {
+        setSelectedEventId(nextConversation.events.at(-1)?.id ?? null);
+      }
+      toast.success("Conversation deleted");
+    },
+    [
+      activeSessionIdRef,
+      agentStatus,
+      sessionsRef,
+      setSelectedEventId,
+      setSessions,
+    ],
+  );
+
   /** Switches Desktop ownership and re-verifies an attached stream before trusting its status. */
   const selectSession = useCallback(
     (sessionId: string) => {
@@ -442,6 +520,8 @@ export function useDashboardSessionActions({
     closeCreateSession,
     createConversation,
     selectConversation,
+    renameConversation,
+    deleteConversation,
     selectSession,
     deleteSession,
     requestDeleteSession,

@@ -130,13 +130,24 @@ export async function POST(req: Request) {
         "Use the bash tool only for background work that has no meaningful visual interaction, such as filesystem operations, source inspection, or running local commands. " +
         "Be sure to advise the user when waiting is necessary. " +
         "If the browser opens with a setup wizard, YOU MUST IGNORE IT and move straight to the next step (e.g. input the url in the search bar).",
-      messages: prunedMessages(messages),
+      messages: prunedMessages(messages, {
+        compactPriorToolCalls: true,
+        preserveLatestScreenshot: true,
+      }),
       tools,
       toolChoice: mustStartWithComputer
         ? { type: "tool", toolName: "computer" }
         : "auto",
       providerOptions: modelConfig.provider === "kimi"
-        ? { openai: { reasoningEffort: modelConfig.reasoningEffort } }
+        ? {
+            openai: {
+              reasoningEffort:
+                messages.at(-1)?.role === "assistant" &&
+                /^k3(?:-|$)/i.test(modelConfig.modelId)
+                  ? "none"
+                  : modelConfig.reasoningEffort,
+            },
+          }
         : modelConfig.provider === "anthropic" ||
             modelConfig.provider === "anthropic-byok"
           ? { anthropic: { cacheControl: { type: "ephemeral" } } }

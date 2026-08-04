@@ -60,16 +60,32 @@ export function DesktopSessionItem({
   onSelect,
   onTogglePin,
 }: DesktopSessionItemProps) {
+  const desktopButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const [menuPosition, setMenuPosition] = useState<{
     left: number;
     top: number;
   } | null>(null);
 
   const closeMenu = () => setMenuPosition(null);
+  const closeTooltip = () => setTooltipPosition(null);
+
+  const showTooltip = () => {
+    const bounds = desktopButtonRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setTooltipPosition({
+      left: Math.min(bounds.right + 10, window.innerWidth - 250),
+      top: Math.max(8, Math.min(bounds.top, window.innerHeight - 190)),
+    });
+  };
 
   const toggleMenu = () => {
+    closeTooltip();
     if (menuPosition) {
       closeMenu();
       return;
@@ -114,6 +130,19 @@ export function DesktopSessionItem({
     if (actionsDisabled) closeMenu();
   }, [actionsDisabled]);
 
+  useEffect(() => {
+    if (!tooltipPosition) return;
+    const closeOnViewportChange = () => closeTooltip();
+    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+    };
+  }, [tooltipPosition]);
+
+  const tooltipId = `desktop-details-${session.id}`;
+
   return (
     <div className={cn("relative py-0.5", showPinnedDivider && "pb-2.5")}>
       <div
@@ -134,11 +163,17 @@ export function DesktopSessionItem({
           />
         ) : null}
         <button
+          ref={desktopButtonRef}
           type="button"
           draggable={!dragDisabled}
           onClick={() => onSelect(session.id)}
+          onMouseEnter={showTooltip}
+          onMouseLeave={closeTooltip}
+          onFocus={showTooltip}
+          onBlur={closeTooltip}
           onDragStart={(event) => {
             closeMenu();
+            closeTooltip();
             onDragStart(event);
           }}
           onDragEnd={onDragEnd}
@@ -147,6 +182,7 @@ export function DesktopSessionItem({
           onKeyDown={onKeyMove}
           disabled={disabled}
           aria-label={`Switch to ${session.title}`}
+          aria-describedby={tooltipPosition ? tooltipId : undefined}
           aria-current={isActive ? "page" : undefined}
           className={cn(
             "relative flex size-9 shrink-0 items-center justify-center rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40",
@@ -201,6 +237,17 @@ export function DesktopSessionItem({
         <div className="absolute bottom-1 left-1 right-1 h-px bg-violet-400/30" />
       ) : null}
 
+      {tooltipPosition
+        ? createPortal(
+            <DesktopDetailsTooltip
+              id={tooltipId}
+              session={session}
+              position={tooltipPosition}
+            />,
+            document.body,
+          )
+        : null}
+
       {menuPosition
         ? createPortal(
             <div
@@ -241,6 +288,72 @@ export function DesktopSessionItem({
             document.body,
           )
         : null}
+    </div>
+  );
+}
+
+const connectionStatusLabels: Record<
+  ChatSession["connectionStatus"],
+  string
+> = {
+  uninitialized: "Not started",
+  checking: "Checking",
+  creating: "Starting",
+  reconnecting: "Reconnecting",
+  ready: "Ready",
+  offline: "Offline",
+  error: "Connection failed",
+};
+
+function DesktopDetailsTooltip({
+  id,
+  session,
+  position,
+}: {
+  id: string;
+  session: ChatSession;
+  position: { left: number; top: number };
+}) {
+  const conversationCount = session.conversations.length;
+  const updatedAt = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(session.updatedAt);
+
+  return (
+    <div
+      id={id}
+      role="tooltip"
+      aria-label={`${session.title} details`}
+      style={position}
+      className="pointer-events-none fixed z-[110] w-60 animate-in fade-in slide-in-from-left-1 zoom-in-95 rounded-xl border border-zinc-200 bg-surface p-3 shadow-2xl duration-150"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="truncate text-xs font-semibold text-zinc-900">
+          {session.title}
+        </span>
+        {session.pinned ? (
+          <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700">
+            Pinned
+          </span>
+        ) : null}
+      </div>
+      <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[10px] leading-4">
+        <dt className="text-zinc-400">Status</dt>
+        <dd className="font-medium text-zinc-700">
+          {connectionStatusLabels[session.connectionStatus]}
+        </dd>
+        <dt className="text-zinc-400">Conversations</dt>
+        <dd className="font-medium text-zinc-700">{conversationCount}</dd>
+        <dt className="text-zinc-400">Sandbox</dt>
+        <dd className="font-medium text-zinc-700">
+          {session.sandboxId ? "Allocated" : "Not allocated"}
+        </dd>
+        <dt className="text-zinc-400">Updated</dt>
+        <dd className="font-medium text-zinc-700">{updatedAt}</dd>
+      </dl>
     </div>
   );
 }
