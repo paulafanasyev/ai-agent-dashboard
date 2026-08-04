@@ -109,6 +109,7 @@ export interface ChatConversation {
   createdAt: number;
   updatedAt: number;
   revision: number;
+  apiConfigId: string | null;
   messages: UIMessage[];
   events: ToolEvent[];
   queuedPrompts: QueuedPrompt[];

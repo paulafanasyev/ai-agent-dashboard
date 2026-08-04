@@ -3,7 +3,8 @@
  * Purpose: Render the chat composer and its submit or stop control.
  * Problem solved: Keeps follow-up input available while tasks wait for the desktop or an active run.
  */
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, ChevronDown } from "lucide-react";
+import type { SelectableApiConfig } from "@/lib/ai/model-config";
 import { Input as ShadcnInput } from "./ui/input";
 
 interface InputProps {
@@ -14,6 +15,9 @@ interface InputProps {
   isLoading: boolean;
   hasQueuedPrompts: boolean;
   modelConfigured: boolean;
+  apiConfigs: SelectableApiConfig[];
+  selectedApiConfigId: string | null;
+  onSelectApiConfig: (profileId: string) => void;
   onConfigureApiKey: () => void;
   stop: () => void;
 }
@@ -27,6 +31,9 @@ export const Input = ({
   isLoading,
   hasQueuedPrompts,
   modelConfigured,
+  apiConfigs,
+  selectedApiConfigId,
+  onSelectApiConfig,
   onConfigureApiKey,
   stop,
 }: InputProps) => {
@@ -46,7 +53,7 @@ export const Input = ({
       ) : (
         <ShadcnInput
           ref={inputRef}
-          className="h-11 w-full rounded-xl border-transparent bg-zinc-100 py-3 pl-4 pr-12 text-sm shadow-none transition-colors focus-visible:border-zinc-300 focus-visible:bg-surface"
+          className="h-[76px] w-full rounded-xl border-transparent bg-zinc-100 pb-10 pl-4 pr-4 pt-3 text-sm shadow-none transition-colors focus-visible:border-zinc-300 focus-visible:bg-surface"
           value={input}
           autoFocus
           placeholder={
@@ -59,12 +66,30 @@ export const Input = ({
           onChange={handleInputChange}
         />
       )}
+      {modelConfigured ? (
+        <div className="absolute bottom-2 right-12 max-w-[calc(100%-4rem)]">
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-zinc-400" />
+          <select
+            aria-label="API configuration for this conversation"
+            value={selectedApiConfigId ?? ""}
+            onChange={(event) => onSelectApiConfig(event.target.value)}
+            disabled={isLoading}
+            className="h-7 max-w-[180px] appearance-none truncate rounded-md border border-zinc-200 bg-surface py-1 pl-2 pr-7 text-[10px] font-medium text-zinc-600 outline-none transition-colors hover:border-zinc-300 hover:text-zinc-900 focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
+          >
+            {apiConfigs.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       {showStop ? (
         <button
           type="button"
           onClick={stop}
           aria-label="Stop current task"
-          className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="absolute bottom-2 right-2 cursor-pointer rounded-lg bg-primary p-1.5 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
         >
           <div className="animate-spin h-4 w-4">
             <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -90,7 +115,7 @@ export const Input = ({
           type="submit"
           disabled={!modelConfigured || !input.trim()}
           aria-label={willQueue ? "Queue task" : "Send task"}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="absolute bottom-2 right-2 rounded-lg bg-primary p-1.5 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
         >
           <ArrowUp className="h-4 w-4" />
         </button>

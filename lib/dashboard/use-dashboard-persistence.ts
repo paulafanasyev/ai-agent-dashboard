@@ -7,10 +7,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  DEFAULT_MODEL_CONFIG,
+  API_CONFIGS_STORAGE_KEY,
+  EMPTY_API_CONFIG_STATE,
   MODEL_SETTINGS_STORAGE_KEY,
+  defaultApiConfigName,
+  parseStoredApiConfigState,
   parseStoredModelConfig,
-  type ClientModelConfig,
+  type ApiConfigState,
 } from "@/lib/ai/model-config";
 import {
   ACTIVE_SESSION_STORAGE_KEY,
@@ -26,9 +29,8 @@ import type { ChatSession } from "@/lib/dashboard/types";
 export function useDashboardPersistence() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [modelConfig, setModelConfig] = useState<ClientModelConfig>(
-    DEFAULT_MODEL_CONFIG,
-  );
+  const [apiConfigState, setApiConfigState] =
+    useState<ApiConfigState>(EMPTY_API_CONFIG_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
   const sessionsRef = useRef(sessions);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -59,12 +61,31 @@ export function useDashboardPersistence() {
     activeSessionIdRef.current = nextActiveId;
     setActiveSessionId(nextActiveId);
     try {
-      const storedModel = sessionStorage.getItem(MODEL_SETTINGS_STORAGE_KEY);
-      if (storedModel) {
-        const parsed = parseStoredModelConfig(JSON.parse(storedModel));
-        if (parsed) setModelConfig(parsed);
+      const storedProfiles = sessionStorage.getItem(API_CONFIGS_STORAGE_KEY);
+      if (storedProfiles) {
+        const parsed = parseStoredApiConfigState(JSON.parse(storedProfiles));
+        if (parsed) setApiConfigState(parsed);
+      } else {
+        const storedModel = sessionStorage.getItem(MODEL_SETTINGS_STORAGE_KEY);
+        if (storedModel) {
+          const parsed = parseStoredModelConfig(JSON.parse(storedModel));
+          if (parsed && parsed.provider !== "anthropic") {
+            const profileId = crypto.randomUUID();
+            setApiConfigState({
+              profiles: [
+                {
+                  id: profileId,
+                  name: defaultApiConfigName(parsed),
+                  config: parsed,
+                },
+              ],
+              defaultConfigId: profileId,
+            });
+          }
+        }
       }
     } catch {
+      sessionStorage.removeItem(API_CONFIGS_STORAGE_KEY);
       sessionStorage.removeItem(MODEL_SETTINGS_STORAGE_KEY);
     }
     setIsHydrated(true);
@@ -104,6 +125,22 @@ export function useDashboardPersistence() {
     }
   }, [activeSessionId, isHydrated]);
 
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (
+      apiConfigState.profiles.length > 0 ||
+      apiConfigState.defaultConfigId !== null
+    ) {
+      sessionStorage.setItem(
+        API_CONFIGS_STORAGE_KEY,
+        JSON.stringify(apiConfigState),
+      );
+    } else {
+      sessionStorage.removeItem(API_CONFIGS_STORAGE_KEY);
+    }
+    sessionStorage.removeItem(MODEL_SETTINGS_STORAGE_KEY);
+  }, [apiConfigState, isHydrated]);
+
   const clearLocalDashboardData = useCallback(() => {
     skipNextSessionPersistenceRef.current = true;
     localStorage.clear();
@@ -112,7 +149,7 @@ export function useDashboardPersistence() {
     activeSessionIdRef.current = null;
     setSessions([]);
     setActiveSessionId(null);
-    setModelConfig(DEFAULT_MODEL_CONFIG);
+    setApiConfigState(EMPTY_API_CONFIG_STATE);
   }, []);
 
   return {
@@ -122,8 +159,8 @@ export function useDashboardPersistence() {
     activeSessionId,
     setActiveSessionId,
     activeSessionIdRef,
-    modelConfig,
-    setModelConfig,
+    apiConfigState,
+    setApiConfigState,
     isHydrated,
     clearLocalDashboardData,
   };

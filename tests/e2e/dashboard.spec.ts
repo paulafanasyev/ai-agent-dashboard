@@ -147,6 +147,47 @@ test("unconfigured composer links to API settings through a notification", async
   await expect(page.getByLabel("Provider")).toBeVisible();
 });
 
+test("migrates the previous single API setting into a named profile", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    ({ completedTutorialKey, legacyApiKey }) => {
+      localStorage.setItem(completedTutorialKey, "complete");
+      sessionStorage.setItem(
+        legacyApiKey,
+        JSON.stringify({
+          provider: "kimi",
+          apiKey: "sk-kimi-legacy-e2e",
+          modelId: "k3",
+          reasoningEffort: "high",
+        }),
+      );
+    },
+    {
+      completedTutorialKey: tutorialKey,
+      legacyApiKey: "ai-agent-dashboard:model-config",
+    },
+  );
+  await page.goto("/");
+
+  const selector = page.getByLabel("API configuration for this conversation");
+  await expect(selector.locator("option")).toHaveText(["Kimi"]);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .toContain('"provider":"kimi"');
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:model-config"),
+      ),
+    )
+    .toBeNull();
+});
+
 test("creates a named desktop without a live Sandbox dependency", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
   await page.goto("/");
@@ -330,7 +371,7 @@ test("runs VNC diagnostics without exposing infrastructure secrets", async ({
   await expect(page.getByText(/VERCEL_(?:OIDC_)?TOKEN=/)).toHaveCount(0);
 });
 
-test("hosted settings require BYOK through one provider dropdown", async ({
+test("manages multiple API configurations and selects one per conversation", async ({
   page,
 }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
@@ -345,17 +386,18 @@ test("hosted settings require BYOK through one provider dropdown", async ({
   await expect(provider.locator("option")).toHaveText([
     "Anthropic",
     "Kimi",
+    "DeepSeek",
     "OpenAI-compatible",
   ]);
 
-  await page
-    .getByRole("textbox", { name: "API Key" })
-    .fill("sk-ant-e2e-browser-only");
+  await page.getByLabel("Configuration name").fill("Anthropic work");
+  await page.locator("#byok-api-key").fill("sk-ant-e2e-browser-only");
   await page.getByLabel("Model ID").fill("claude-test-model");
+  await page.getByRole("button", { name: "Add configuration" }).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
-        sessionStorage.getItem("ai-agent-dashboard:model-config"),
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
       ),
     )
     .toContain('"provider":"anthropic-byok"');
@@ -363,7 +405,54 @@ test("hosted settings require BYOK through one provider dropdown", async ({
     .poll(() => page.evaluate(() => JSON.stringify(localStorage)))
     .not.toContain("sk-ant-e2e-browser-only");
 
+  await page.getByRole("button", { name: "Add config" }).click();
+  await page.getByLabel("Configuration name").fill("DeepSeek fast");
+  await provider.selectOption("deepseek");
+  await page.locator("#byok-api-key").fill("sk-deepseek-e2e-only");
+  await expect(page.getByLabel("Model ID")).toHaveValue("deepseek-v4-flash");
+  await page.getByRole("button", { name: "Add configuration" }).click();
+
   await page.getByRole("button", { name: "Close settings" }).click();
+  const configSelector = page.getByLabel(
+    "API configuration for this conversation",
+  );
+  await expect(configSelector.locator("option")).toHaveText([
+    "Anthropic work",
+    "DeepSeek fast",
+  ]);
+  await configSelector.selectOption({ label: "DeepSeek fast" });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const profiles = JSON.parse(
+          sessionStorage.getItem("ai-agent-dashboard:api-configs:v1") ?? "{}",
+        ).profiles ?? [];
+        const selectedId = profiles.find(
+          (profile: { id: string; name: string }) =>
+            profile.name === "DeepSeek fast",
+        )?.id;
+        const sessions = JSON.parse(
+          localStorage.getItem("ai-agent-dashboard:sessions:v2") ?? "[]",
+        );
+        return sessions[0]?.conversations[0]?.apiConfigId === selectedId;
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "Edit DeepSeek fast" }).click();
+  await page.getByLabel("Configuration name").fill("DeepSeek primary");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByRole("button", { name: "Delete Anthropic work" }).click();
+  await page.getByRole("button", { name: "Delete Anthropic work" }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit Anthropic work" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(configSelector.locator("option")).toHaveText([
+    "DeepSeek primary",
+  ]);
+
   const weatherPreset = page.getByRole("button", {
     name: "Use preset: What's the weather in Dubai?",
   });
