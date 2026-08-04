@@ -92,9 +92,13 @@ export function useDashboardModelConfig({
 
   const createApiConfig = useCallback(
     (profile: ApiConfigProfile) => {
+      const normalizedProfile = {
+        ...profile,
+        name: profile.config.modelId,
+      };
       setApiConfigState((previous) => ({
-        profiles: [...previous.profiles, profile],
-        defaultConfigId: previous.defaultConfigId ?? profile.id,
+        profiles: [...previous.profiles, normalizedProfile],
+        defaultConfigId: previous.defaultConfigId ?? normalizedProfile.id,
       }));
     },
     [setApiConfigState],
@@ -102,10 +106,14 @@ export function useDashboardModelConfig({
 
   const updateApiConfig = useCallback(
     (profile: ApiConfigProfile) => {
+      const normalizedProfile = {
+        ...profile,
+        name: profile.config.modelId,
+      };
       setApiConfigState((previous) => ({
         ...previous,
         profiles: previous.profiles.map((candidate) =>
-          candidate.id === profile.id ? profile : candidate,
+          candidate.id === normalizedProfile.id ? normalizedProfile : candidate,
         ),
       }));
     },

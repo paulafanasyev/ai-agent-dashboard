@@ -17,7 +17,7 @@ describe("API model configuration", () => {
       profiles: [
         {
           id: "deepseek-work",
-          name: "DeepSeek work",
+          name: "Old custom label",
           config: {
             provider: "deepseek",
             apiKey: "sk-deepseek-test",
@@ -32,7 +32,7 @@ describe("API model configuration", () => {
       profiles: [
         {
           id: "deepseek-work",
-          name: "DeepSeek work",
+          name: "deepseek-v4-flash",
           config: {
             provider: "deepseek",
             apiKey: "sk-deepseek-test",
