@@ -1,7 +1,7 @@
 /**
  * File: components/settings/api-settings.tsx
  * Purpose: Manage multiple tab-scoped API profiles through one CRUD editor.
- * Problem solved: Lets users name, create, edit, delete, and default provider credentials without exposing keys to durable storage.
+ * Problem solved: Lets users create, edit, delete, and default model-based credentials without exposing keys to durable storage.
  */
 "use client";
 
@@ -27,7 +27,7 @@ import {
   KIMI_BASE_URL,
   PROJECT_CLAUDE_CONFIG_ID,
   isSafeCustomBaseUrl,
-  modelConfigLabel,
+  modelProviderLabel,
   type ApiConfigProfile,
   type ClientModelConfig,
   type KimiReasoningEffort,
@@ -61,7 +61,6 @@ export function ApiSettings({
   const [editingId, setEditingId] = useState<string | null>(
     profiles[0]?.id ?? null,
   );
-  const [name, setName] = useState("");
   const [provider, setProvider] =
     useState<EditableProvider>("anthropic-byok");
   const [apiKey, setApiKey] = useState("");
@@ -82,7 +81,6 @@ export function ApiSettings({
 
   const resetEditor = useCallback((profile?: ApiConfigProfile) => {
     const config = profile?.config;
-    setName(profile?.name ?? "");
     setProvider(config?.provider ?? "anthropic-byok");
     setApiKey(config?.apiKey ?? "");
     setModelId(
@@ -124,10 +122,6 @@ export function ApiSettings({
   const buildConfig = (): ClientModelConfig | null => {
     const trimmedKey = apiKey.trim();
     const trimmedModel = modelId.trim();
-    if (!name.trim()) {
-      setError("Enter a name for this API configuration.");
-      return null;
-    }
     if (trimmedKey.length < 8) {
       setError("Enter an API key with at least 8 characters.");
       return null;
@@ -165,16 +159,16 @@ export function ApiSettings({
     if (!config || config.provider === "anthropic") return;
     const profile: ApiConfigProfile = {
       id: editingProfile?.id ?? crypto.randomUUID(),
-      name: name.trim().slice(0, 60),
+      name: config.modelId,
       config,
     };
     if (editingProfile) {
       onUpdate(profile);
-      toast.success(`${profile.name} updated`);
+      toast.success(`${config.modelId} updated`);
     } else {
       onCreate(profile);
       setEditingId(profile.id);
-      toast.success(`${profile.name} added`);
+      toast.success(`${config.modelId} added`);
     }
     setError(null);
   };
@@ -186,7 +180,7 @@ export function ApiSettings({
     }
     onDelete(profile.id);
     setDeleteConfirmationId(null);
-    toast.success(`${profile.name} deleted`);
+    toast.success(`${profile.config.modelId} deleted`);
   };
 
   const fixedBaseUrl =
@@ -261,14 +255,16 @@ export function ApiSettings({
                   type="button"
                   onClick={() => setEditingId(profile.id)}
                   className="w-full text-left"
-                  aria-label={`Edit ${profile.name}`}
+                  aria-label={`Edit ${profile.config.modelId}`}
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] font-semibold">{profile.name}</span>
+                    <span className="truncate font-mono text-[11px] font-semibold">
+                      {profile.config.modelId}
+                    </span>
                     {selected ? <Check className="size-3.5 shrink-0 text-violet-400" /> : null}
                   </span>
                   <span className="mt-1 block truncate text-[9px] text-zinc-500">
-                    {modelConfigLabel(profile.config)}
+                    {modelProviderLabel(profile.config)}
                   </span>
                 </button>
                 <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200/70 pt-2">
@@ -288,7 +284,7 @@ export function ApiSettings({
                     type="button"
                     onClick={() => deleteProfile(profile)}
                     disabled={modelDisabled}
-                    aria-label={`Delete ${profile.name}`}
+                    aria-label={`Delete ${profile.config.modelId}`}
                     className={cn(
                       "flex items-center gap-1 rounded-md px-1.5 py-1 text-[9px] transition-colors",
                       confirmingDelete
@@ -313,32 +309,22 @@ export function ApiSettings({
         </div>
 
         <fieldset disabled={modelDisabled} className="min-w-0 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="api-config-name">Configuration name</Label>
-              <Input
-                id="api-config-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. DeepSeek work"
-                maxLength={60}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="byok-provider">Provider</Label>
-              <select
-                id="byok-provider"
-                aria-label="Provider"
-                value={provider}
-                onChange={(event) => changeProvider(event.target.value as EditableProvider)}
-                className="flex h-9 w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 text-xs text-zinc-900 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-violet-400"
-              >
-                <option value="anthropic-byok">Anthropic</option>
-                <option value="kimi">Kimi</option>
-                <option value="deepseek">DeepSeek</option>
-                <option value="custom">OpenAI-compatible</option>
-              </select>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="byok-provider">Provider</Label>
+            <select
+              id="byok-provider"
+              aria-label="Provider"
+              value={provider}
+              onChange={(event) =>
+                changeProvider(event.target.value as EditableProvider)
+              }
+              className="flex h-9 w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 text-xs text-zinc-900 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-violet-400"
+            >
+              <option value="anthropic-byok">Anthropic</option>
+              <option value="kimi">Kimi</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="custom">OpenAI-compatible</option>
+            </select>
           </div>
 
           <div className="space-y-2">

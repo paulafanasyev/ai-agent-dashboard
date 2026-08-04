@@ -147,7 +147,7 @@ test("unconfigured composer links to API settings through a notification", async
   await expect(page.getByLabel("Provider")).toBeVisible();
 });
 
-test("migrates the previous single API setting into a named profile", async ({
+test("migrates the previous single API setting and labels it by model ID", async ({
   page,
 }) => {
   await page.addInitScript(
@@ -170,8 +170,12 @@ test("migrates the previous single API setting into a named profile", async ({
   );
   await page.goto("/");
 
-  const selector = page.getByLabel("API configuration for this conversation");
-  await expect(selector.locator("option")).toHaveText(["Kimi"]);
+  const modelButton = page.getByRole("button", { name: "Choose model" });
+  await expect(modelButton).toContainText("k3");
+  await modelButton.click();
+  await expect(
+    page.getByRole("listbox", { name: "Models" }).getByRole("option"),
+  ).toContainText(["k3"]);
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -390,7 +394,6 @@ test("manages multiple API configurations and selects one per conversation", asy
     "OpenAI-compatible",
   ]);
 
-  await page.getByLabel("Configuration name").fill("Anthropic work");
   await page.locator("#byok-api-key").fill("sk-ant-e2e-browser-only");
   await page.getByLabel("Model ID").fill("claude-test-model");
   await page.getByRole("button", { name: "Add configuration" }).click();
@@ -406,21 +409,23 @@ test("manages multiple API configurations and selects one per conversation", asy
     .not.toContain("sk-ant-e2e-browser-only");
 
   await page.getByRole("button", { name: "Add config" }).click();
-  await page.getByLabel("Configuration name").fill("DeepSeek fast");
   await provider.selectOption("deepseek");
   await page.locator("#byok-api-key").fill("sk-deepseek-e2e-only");
   await expect(page.getByLabel("Model ID")).toHaveValue("deepseek-v4-flash");
   await page.getByRole("button", { name: "Add configuration" }).click();
 
   await page.getByRole("button", { name: "Close settings" }).click();
-  const configSelector = page.getByLabel(
-    "API configuration for this conversation",
-  );
-  await expect(configSelector.locator("option")).toHaveText([
-    "Anthropic work",
-    "DeepSeek fast",
-  ]);
-  await configSelector.selectOption({ label: "DeepSeek fast" });
+  const modelButton = page.getByRole("button", { name: "Choose model" });
+  await expect(modelButton).toContainText("claude-test-model");
+  await expect(page.locator("form select")).toHaveCount(0);
+  await modelButton.click();
+  const modelMenu = page.getByRole("listbox", { name: "Models" });
+  await expect(modelMenu.getByRole("option")).toHaveCount(2);
+  await expect(modelMenu).toContainText("claude-test-model");
+  await expect(modelMenu).toContainText("deepseek-v4-flash");
+  await modelMenu
+    .getByRole("option", { name: /deepseek-v4-flash/ })
+    .click();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -428,8 +433,8 @@ test("manages multiple API configurations and selects one per conversation", asy
           sessionStorage.getItem("ai-agent-dashboard:api-configs:v1") ?? "{}",
         ).profiles ?? [];
         const selectedId = profiles.find(
-          (profile: { id: string; name: string }) =>
-            profile.name === "DeepSeek fast",
+          (profile: { id: string; config: { modelId: string } }) =>
+            profile.config.modelId === "deepseek-v4-flash",
         )?.id;
         const sessions = JSON.parse(
           localStorage.getItem("ai-agent-dashboard:sessions:v2") ?? "[]",
@@ -440,18 +445,20 @@ test("manages multiple API configurations and selects one per conversation", asy
     .toBe(true);
 
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByRole("button", { name: "Edit DeepSeek fast" }).click();
-  await page.getByLabel("Configuration name").fill("DeepSeek primary");
+  await page.getByRole("button", { name: "Edit deepseek-v4-flash" }).click();
+  await page.getByLabel("Model ID").fill("deepseek-v4-pro");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await page.getByRole("button", { name: "Delete Anthropic work" }).click();
-  await page.getByRole("button", { name: "Delete Anthropic work" }).click();
+  await page.getByRole("button", { name: "Delete claude-test-model" }).click();
+  await page.getByRole("button", { name: "Delete claude-test-model" }).click();
   await expect(
-    page.getByRole("button", { name: "Edit Anthropic work" }),
+    page.getByRole("button", { name: "Edit claude-test-model" }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Close settings" }).click();
-  await expect(configSelector.locator("option")).toHaveText([
-    "DeepSeek primary",
-  ]);
+  await expect(modelButton).toContainText("deepseek-v4-pro");
+  await modelButton.click();
+  await expect(
+    page.getByRole("listbox", { name: "Models" }).getByRole("option"),
+  ).toHaveCount(1);
 
   const weatherPreset = page.getByRole("button", {
     name: "Use preset: What's the weather in Dubai?",

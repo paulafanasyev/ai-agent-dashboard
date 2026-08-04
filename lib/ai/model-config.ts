@@ -130,6 +130,16 @@ export function modelConfigLabel(config: ClientModelConfig) {
   return "Claude";
 }
 
+/** Returns a short provider name for profile menus without exposing credentials. */
+export function modelProviderLabel(config: ClientModelConfig) {
+  if (config.provider === "anthropic" || config.provider === "anthropic-byok") {
+    return "Anthropic";
+  }
+  if (config.provider === "kimi") return "Kimi";
+  if (config.provider === "deepseek") return "DeepSeek";
+  return "OpenAI-compatible";
+}
+
 /** Validates and migrates a tab-scoped model draft before it enters React state. */
 export function parseStoredModelConfig(
   value: unknown,
@@ -216,9 +226,7 @@ export function parseStoredApiConfigState(value: unknown): ApiConfigState | null
       typeof profile.id !== "string" ||
       !profile.id.trim() ||
       ids.has(profile.id) ||
-      profile.id === PROJECT_CLAUDE_CONFIG_ID ||
-      typeof profile.name !== "string" ||
-      !profile.name.trim()
+      profile.id === PROJECT_CLAUDE_CONFIG_ID
     ) {
       return null;
     }
@@ -227,7 +235,7 @@ export function parseStoredApiConfigState(value: unknown): ApiConfigState | null
     ids.add(profile.id);
     profiles.push({
       id: profile.id,
-      name: profile.name.trim().slice(0, 60),
+      name: config.modelId,
       config,
     });
   }
@@ -245,9 +253,5 @@ export function parseStoredApiConfigState(value: unknown): ApiConfigState | null
 
 /** Gives a migrated single-provider setting a useful editable profile name. */
 export function defaultApiConfigName(config: ClientModelConfig) {
-  if (config.provider === "anthropic-byok") return "Anthropic";
-  if (config.provider === "kimi") return "Kimi";
-  if (config.provider === "deepseek") return "DeepSeek";
-  if (config.provider === "custom") return "Custom API";
-  return "Project Claude";
+  return config.provider === "anthropic" ? "Project Claude" : config.modelId;
 }
