@@ -341,7 +341,10 @@ function ChatWorkspaceComponent({
   };
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-surface">
+    <section
+      data-tutorial="chat-workspace"
+      className="flex min-w-0 flex-1 flex-col bg-surface"
+    >
       <header className="flex h-12 shrink-0 items-center justify-between gap-3 bg-zinc-50/80 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <ConversationSwitcher

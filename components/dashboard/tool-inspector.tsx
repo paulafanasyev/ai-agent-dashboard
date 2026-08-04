@@ -37,6 +37,7 @@ function ToolInspectorComponent({
 
   return (
     <section
+      data-tutorial="inspector"
       className={cn(
         "flex shrink-0 flex-col border-t border-zinc-100 bg-surface",
         fill ? "min-h-0 flex-1" : "h-[240px]",

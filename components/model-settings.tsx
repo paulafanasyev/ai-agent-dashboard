@@ -7,10 +7,12 @@
 
 import {
   CheckCircle2,
+  CircleHelp,
   Eye,
   EyeOff,
   KeyRound,
   Palette,
+  Play,
   Settings,
   ShieldCheck,
   X,
@@ -35,12 +37,13 @@ interface DashboardSettingsProps {
   modelDisabled: boolean;
   trigger: "rail" | "icon";
   onConfigChange: (config: ClientModelConfig) => void;
+  onReplayTutorial: () => void;
 }
 
 type AccessMode = "project" | "byok";
 type ByokProvider = "kimi" | "custom";
 type SaveState = "saved" | "pending" | "incomplete";
-type SettingsSection = "api" | "appearance";
+type SettingsSection = "api" | "appearance" | "tutorial";
 
 function sameConfig(left: ClientModelConfig, right: ClientModelConfig) {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -51,6 +54,7 @@ export function DashboardSettings({
   modelDisabled,
   trigger,
   onConfigChange,
+  onReplayTutorial,
 }: DashboardSettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [accessMode, setAccessMode] = useState<AccessMode>(
@@ -184,6 +188,7 @@ export function DashboardSettings({
   return (
     <>
       <button
+        data-tutorial="settings"
         type="button"
         onClick={open}
         aria-label="Open settings"
@@ -239,11 +244,12 @@ export function DashboardSettings({
                 </p>
                 <nav
                   aria-label="Settings sections"
-                  className="grid grid-cols-2 gap-1 md:flex md:flex-col"
+                  className="grid grid-cols-3 gap-1 md:flex md:flex-col"
                 >
                   <SettingsNavItem
                     icon={<KeyRound className="size-4" />}
                     label="API Configuration"
+                    compactLabel="API"
                     description="Access and models"
                     active={activeSection === "api"}
                     onClick={() => setActiveSection("api")}
@@ -251,9 +257,18 @@ export function DashboardSettings({
                   <SettingsNavItem
                     icon={<Palette className="size-4" />}
                     label="Appearance"
+                    compactLabel="Theme"
                     description="Theme and preview"
                     active={activeSection === "appearance"}
                     onClick={() => setActiveSection("appearance")}
+                  />
+                  <SettingsNavItem
+                    icon={<CircleHelp className="size-4" />}
+                    label="Tutorial"
+                    compactLabel="Tutorial"
+                    description="Replay the product tour"
+                    active={activeSection === "tutorial"}
+                    onClick={() => setActiveSection("tutorial")}
                   />
                 </nav>
               </aside>
@@ -430,7 +445,7 @@ export function DashboardSettings({
                   </p>
                 ) : null}
                   </section>
-                ) : (
+                ) : activeSection === "appearance" ? (
                   <section
                     aria-labelledby="theme-settings-title"
                     className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-7"
@@ -449,6 +464,56 @@ export function DashboardSettings({
                     </div>
                     <ThemeSettings />
                   </section>
+                ) : (
+                  <section
+                    aria-labelledby="tutorial-settings-title"
+                    className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-7"
+                  >
+                    <div className="mb-5">
+                      <h3
+                        id="tutorial-settings-title"
+                        className="text-sm font-semibold"
+                      >
+                        Product tutorial
+                      </h3>
+                      <p className="mt-1 text-[10px] text-zinc-500">
+                        Revisit the guided tour whenever you need a quick
+                        refresher.
+                      </p>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/60">
+                      <div className="border-b border-zinc-200 bg-gradient-to-br from-violet-500/15 via-transparent to-sky-500/10 p-5">
+                        <span className="flex size-10 items-center justify-center rounded-xl bg-violet-500/15 text-violet-400">
+                          <CircleHelp className="size-5" />
+                        </span>
+                        <h4 className="mt-4 text-sm font-semibold text-zinc-900">
+                          Tour the Agent Desk workspace
+                        </h4>
+                        <p className="mt-1 max-w-lg text-xs leading-5 text-zinc-500">
+                          See how desktops, conversations, the live computer,
+                          event inspector, and settings fit together. You can
+                          skip or exit the tour at any time.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                        <p className="text-[10px] leading-4 text-zinc-500">
+                          The tour will begin over your current workspace.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOpen(false);
+                            window.requestAnimationFrame(onReplayTutorial);
+                          }}
+                          className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-violet-400"
+                        >
+                          <Play className="size-3.5 fill-current" />
+                          Start tutorial
+                        </button>
+                      </div>
+                    </div>
+                  </section>
                 )}
               </div>
             </div>
@@ -462,12 +527,14 @@ export function DashboardSettings({
 function SettingsNavItem({
   icon,
   label,
+  compactLabel,
   description,
   active,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  compactLabel: string;
   description: string;
   active: boolean;
   onClick: () => void;
@@ -486,7 +553,10 @@ function SettingsNavItem({
     >
       <span className="shrink-0">{icon}</span>
       <span className="min-w-0">
-        <span className="block truncate text-[11px] font-medium">{label}</span>
+        <span className="block truncate text-[11px] font-medium">
+          <span className="md:hidden">{compactLabel}</span>
+          <span className="hidden md:inline">{label}</span>
+        </span>
         <span className="hidden truncate text-[9px] text-zinc-500 md:block">
           {description}
         </span>

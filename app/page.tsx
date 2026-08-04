@@ -16,6 +16,10 @@ import {
   RenameDesktopDialog,
 } from "@/components/dashboard/desktop-dialogs";
 import { MobileDesktopSwitcher } from "@/components/dashboard/mobile-desktop-switcher";
+import {
+  OnboardingTutorial,
+  TUTORIAL_STORAGE_KEY,
+} from "@/components/dashboard/onboarding-tutorial";
 import { SessionSidebar } from "@/components/dashboard/session-sidebar";
 import { ToolInspector } from "@/components/dashboard/tool-inspector";
 import {
@@ -103,6 +107,7 @@ export default function DashboardPage() {
     DEFAULT_MODEL_CONFIG,
   );
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const isDesktop = useDesktopLayout();
   const sessionsRef = useRef(sessions);
   const streamUrlsRef = useRef(streamUrls);
@@ -185,6 +190,22 @@ export default function DashboardPage() {
       localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
     }
   }, [activeSessionId, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "complete") return;
+    const frame = window.requestAnimationFrame(() => setIsTutorialOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isHydrated]);
+
+  const closeTutorial = useCallback(() => {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, "complete");
+    setIsTutorialOpen(false);
+  }, []);
+
+  const replayTutorial = useCallback(() => {
+    setIsTutorialOpen(true);
+  }, []);
 
   const connectDesktop = useCallback(async (sessionId: string) => {
     if (
@@ -861,9 +882,10 @@ export default function DashboardPage() {
         modelDisabled={agentStatus !== "idle"}
         trigger="rail"
         onConfigChange={updateModelConfig}
+        onReplayTutorial={replayTutorial}
       />
     ),
-    [agentStatus, modelConfig, updateModelConfig],
+    [agentStatus, modelConfig, replayTutorial, updateModelConfig],
   );
 
   if (!isHydrated) {
@@ -899,6 +921,7 @@ export default function DashboardPage() {
             modelDisabled={agentStatus !== "idle"}
             trigger="icon"
             onConfigChange={updateModelConfig}
+            onReplayTutorial={replayTutorial}
           />
         ) : null}
       </div>
@@ -927,6 +950,14 @@ export default function DashboardPage() {
         onRename={renameSession}
       />
     </>
+  );
+
+  const tutorialOverlay = (
+    <OnboardingTutorial
+      open={isTutorialOpen}
+      onComplete={closeTutorial}
+      onSkip={closeTutorial}
+    />
   );
 
   if (!activeSession || !activeConversation) {
@@ -978,6 +1009,7 @@ export default function DashboardPage() {
           )}
         </main>
         {desktopDialogs}
+        {tutorialOverlay}
       </div>
     );
   }
@@ -1097,6 +1129,7 @@ export default function DashboardPage() {
         </main>
       )}
       {desktopDialogs}
+      {tutorialOverlay}
     </div>
   );
 }

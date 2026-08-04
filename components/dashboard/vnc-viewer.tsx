@@ -233,6 +233,7 @@ function VncViewerComponent({
 
   return (
     <section
+      data-tutorial="desktop-viewer"
       ref={sectionRef}
       style={displayMode === "pip" ? pipPosition : undefined}
       className={cn(

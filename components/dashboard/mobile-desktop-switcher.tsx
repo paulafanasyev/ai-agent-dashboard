@@ -103,7 +103,10 @@ function MobileDesktopSwitcherComponent({
   if (!activeSession) return null;
 
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between bg-black px-2 text-white">
+    <div
+      data-tutorial="desktop-nav"
+      className="flex h-10 shrink-0 items-center justify-between bg-black px-2 text-white"
+    >
       <div ref={rootRef} className="relative min-w-0 flex-1">
         <button
           type="button"

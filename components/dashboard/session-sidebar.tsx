@@ -213,6 +213,7 @@ function SessionSidebarComponent({
 
   return (
     <aside
+      data-tutorial="desktop-nav"
       style={{ width: sidebarWidth }}
       className="relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-100 bg-zinc-50/70"
     >
