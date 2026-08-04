@@ -99,6 +99,10 @@ function mapKey(key: string): string {
   return keyMap[key.toLowerCase()] || keyMap[key] || key;
 }
 
+/**
+ * Validates and executes one provider-neutral computer action against display :99.
+ * Every provider wrapper delegates here so pointer, keyboard, screenshot, and result behavior stay identical.
+ */
 export async function executeComputerAction(
   sandboxId: string,
   input: ComputerActionInput,
@@ -290,6 +294,7 @@ export async function executeComputerAction(
   }
 }
 
+/** Executes a background command inside the same Sandbox while returning bounded text output. */
 export async function executeBashCommand(
   sandboxId: string | undefined,
   command: string,

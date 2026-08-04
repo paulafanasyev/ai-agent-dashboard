@@ -37,12 +37,17 @@ export const DEFAULT_MODEL_CONFIG: ClientModelConfig = {
 
 export const MODEL_SETTINGS_STORAGE_KEY = "ai-agent-dashboard:model-config";
 
+/** Narrows untrusted stored values to the reasoning levels accepted by the Kimi API. */
 export function isKimiReasoningEffort(
   value: string,
 ): value is KimiReasoningEffort {
   return value === "low" || value === "high" || value === "max";
 }
 
+/**
+ * Accepts only public HTTPS provider endpoints and rejects obvious loopback/private targets.
+ * This is a validation layer, not a replacement for deployment-level outbound network policy.
+ */
 export function isSafeCustomBaseUrl(value: string) {
   try {
     const url = new URL(value);
@@ -82,6 +87,7 @@ export function isSafeCustomBaseUrl(value: string) {
   }
 }
 
+/** Produces a credential-free provider/model label safe for rendering in Settings. */
 export function modelConfigLabel(config: ClientModelConfig) {
   if (config.provider === "kimi") return `Kimi · ${config.modelId}`;
   if (config.provider === "custom") return config.modelId;
@@ -91,6 +97,7 @@ export function modelConfigLabel(config: ClientModelConfig) {
   return "Claude";
 }
 
+/** Validates and migrates a tab-scoped model draft before it enters React state. */
 export function parseStoredModelConfig(
   value: unknown,
 ): ClientModelConfig | null {

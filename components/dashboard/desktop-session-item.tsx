@@ -1,6 +1,7 @@
 /**
  * File: components/dashboard/desktop-session-item.tsx
  * Purpose: Render one desktop navigation row and action menu.
+ * Problem solved: Keeps status, drag ordering, details, and contextual actions compact without overflowing the rail.
  */
 "use client";
 
@@ -38,6 +39,7 @@ export interface DesktopSessionItemProps {
   onTogglePin: () => void;
 }
 
+/** Combines selection, status, reorder, hover details, and contextual actions for one Desktop row. */
 export function DesktopSessionItem({
   session,
   isActive,

@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/vnc-connection.test.ts
+ * Purpose: Verify VNC reconnect backoff and invalid-attempt normalization.
+ * Problem solved: Prevents retry timing changes from causing reconnect storms or inconsistent delays.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   VNC_RECONNECT_MAX_DELAY_MS,

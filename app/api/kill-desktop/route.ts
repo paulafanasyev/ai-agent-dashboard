@@ -24,6 +24,7 @@ async function handleKillDesktop(request: Request) {
   }
 }
 
+/** Stops the explicitly requested Sandbox; destructive cleanup is intentionally POST-only. */
 export async function POST(request: Request) {
   return handleKillDesktop(request);
 }

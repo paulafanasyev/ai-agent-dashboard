@@ -11,6 +11,7 @@ import {
   executeComputerAction,
 } from "./actions";
 
+/** Wraps shared computer actions in a provider-neutral AI SDK function tool. */
 export const genericComputerTool = (sandboxId: string) =>
   tool({
     description:
@@ -24,6 +25,7 @@ export const genericComputerTool = (sandboxId: string) =>
     },
   });
 
+/** Wraps shared shell execution in a provider-neutral AI SDK function tool. */
 export const genericBashTool = (sandboxId?: string) =>
   tool({
     description:

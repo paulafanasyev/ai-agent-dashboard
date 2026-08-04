@@ -109,6 +109,7 @@ function isDashboardTheme(theme: string | undefined): theme is DashboardTheme {
   return DASHBOARD_THEMES.includes(theme as DashboardTheme);
 }
 
+/** Applies theme choices immediately and provides an accessible preview listbox. */
 export function ThemeSettings() {
   const { theme, setTheme } = useTheme();
   const activeTheme = isDashboardTheme(theme) ? theme : "vercel";

@@ -14,6 +14,7 @@ interface PromptQueueProps {
   onRemove: (promptId: string) => void;
 }
 
+/** Renders FIFO order and allows removal without owning execution state. */
 export function PromptQueue({
   prompts,
   waitingForDesktop,

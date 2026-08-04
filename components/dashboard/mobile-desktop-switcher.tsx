@@ -273,6 +273,7 @@ function MobileDesktopSwitcherComponent({
   );
 }
 
+/** Memoizes the compact mobile Desktop controls independently from Chat streaming. */
 export const MobileDesktopSwitcher = memo(
   MobileDesktopSwitcherComponent,
   (previous, next) =>

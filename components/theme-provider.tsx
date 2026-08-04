@@ -37,6 +37,7 @@ function DashboardThemeGuard({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** Restores a supported theme, migrates removed values, and applies one document-level data attribute. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <NextThemeProvider

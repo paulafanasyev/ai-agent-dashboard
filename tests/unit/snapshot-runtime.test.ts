@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/snapshot-runtime.test.ts
+ * Purpose: Verify pinned noVNC dependencies and the supervised desktop startup script.
+ * Problem solved: Keeps rebuilt Sandbox snapshots reproducible and syntactically valid.
+ */
+
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {

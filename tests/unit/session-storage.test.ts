@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/session-storage.test.ts
+ * Purpose: Verify versioned Session persistence, restoration, redaction, and empty-state behavior.
+ * Problem solved: Protects browser-local history without restoring stale Ready state or oversized screenshots.
+ */
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACTIVE_SESSION_STORAGE_KEY,

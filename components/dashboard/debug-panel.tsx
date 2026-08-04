@@ -111,4 +111,5 @@ function DebugPanelComponent({
   );
 }
 
+/** Avoids rebuilding the event timeline when unrelated Dashboard state changes. */
 export const DebugPanel = memo(DebugPanelComponent);

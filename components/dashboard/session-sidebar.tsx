@@ -316,6 +316,7 @@ function sessionNavigationEqual(
   );
 }
 
+/** Keeps Desktop navigation stable while streamed Conversation content changes. */
 export const SessionSidebar = memo(
   SessionSidebarComponent,
   (previous, next) =>

@@ -1,6 +1,7 @@
 /**
  * File: playwright.config.ts
  * Purpose: Validate critical first-run and session flows in a real browser.
+ * Problem solved: Runs the same product behavior against desktop and mobile Chromium builds.
  */
 import { defineConfig, devices } from "@playwright/test";
 

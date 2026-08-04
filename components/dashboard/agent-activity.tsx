@@ -115,6 +115,7 @@ function AgentActivityComponent({
   );
 }
 
+/** Renders only when observable run, connection, event, or queue state changes. */
 export const AgentActivity = memo(AgentActivityComponent);
 
 function ActivityShell({

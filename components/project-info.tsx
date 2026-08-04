@@ -6,6 +6,7 @@
 import { Bot } from "lucide-react";
 import { motion } from "motion/react";
 
+/** Provides the empty Conversation orientation without introducing state or runtime work. */
 export function ProjectInfo() {
   return (
     <motion.section

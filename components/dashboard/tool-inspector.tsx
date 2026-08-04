@@ -191,6 +191,7 @@ function ToolInspectorComponent({
   );
 }
 
+/** Renders expanded details only when the selected event or fill mode changes. */
 export const ToolInspector = memo(ToolInspectorComponent);
 
 function Detail({

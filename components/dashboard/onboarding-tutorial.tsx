@@ -178,6 +178,7 @@ function cardPosition(
   } satisfies CSSProperties;
 }
 
+/** Positions a responsive spotlight over declared targets and owns keyboard step navigation. */
 export function OnboardingTutorial({
   open,
   onComplete,

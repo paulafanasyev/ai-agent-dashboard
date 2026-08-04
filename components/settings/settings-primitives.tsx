@@ -1,6 +1,7 @@
 /**
  * File: components/settings/settings-primitives.tsx
  * Purpose: Share compact navigation, choice, and save-status controls.
+ * Problem solved: Keeps repeated Settings interactions visually and behaviorally consistent.
  */
 import { CheckCircle2, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";

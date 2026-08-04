@@ -1,6 +1,7 @@
 /**
  * File: lib/sandbox/snapshot-runtime.ts
  * Purpose: Pin and supervise every process required by the reusable desktop snapshot.
+ * Problem solved: Makes Xvnc, openbox, websockify, and Chrome reproducible and self-recovering.
  */
 
 export const NOVNC_VERSION = "v1.7.0";

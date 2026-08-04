@@ -1,6 +1,7 @@
 /**
  * File: lib/ai/runtime-policy.ts
  * Purpose: Keep shared project credentials local while making hosted deployments BYOK-only.
+ * Problem solved: Prevents public deployments from spending an operator's shared Claude credentials.
  */
 
 export interface ModelCapabilities {
@@ -8,6 +9,7 @@ export interface ModelCapabilities {
   accessMode: "local-project-or-byok" | "byok-only";
 }
 
+/** Derives access policy from environment presence without exposing any credential value. */
 export function resolveModelCapabilities(
   environment: Pick<NodeJS.ProcessEnv, "NODE_ENV" | "VERCEL" | "ANTHROPIC_API_KEY">,
 ): ModelCapabilities {
@@ -24,6 +26,7 @@ export function resolveModelCapabilities(
   };
 }
 
+/** Reads the current server environment and returns the canonical model access policy. */
 export function getServerModelCapabilities() {
   return resolveModelCapabilities({
     NODE_ENV: process.env.NODE_ENV,

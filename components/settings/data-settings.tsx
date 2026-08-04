@@ -1,6 +1,7 @@
 /**
  * File: components/settings/data-settings.tsx
  * Purpose: Provide a deliberate, phrase-confirmed way to erase browser-local dashboard data.
+ * Problem solved: Prevents accidental deletion of sessions, chats, settings, and cached state.
  */
 "use client";
 
@@ -18,6 +19,7 @@ interface DataSettingsProps {
   onClearAllData: () => Promise<void>;
 }
 
+/** Requires an exact confirmation phrase before invoking irreversible local-data cleanup. */
 export function DataSettings({ disabled, onClearAllData }: DataSettingsProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmation, setConfirmation] = useState("");

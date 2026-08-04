@@ -72,6 +72,7 @@ function restoreMessages(messages: UIMessage[]) {
   }));
 }
 
+/** Creates an isolated Conversation record with no messages, events, or queued prompts. */
 export function createEmptyConversation(): ChatConversation {
   const now = Date.now();
   return {
@@ -86,6 +87,7 @@ export function createEmptyConversation(): ChatConversation {
   };
 }
 
+/** Creates one Desktop Session and its required initial Conversation without allocating a Sandbox. */
 export function createEmptySession(title = "Desktop session"): ChatSession {
   const now = Date.now();
   const conversation = createEmptyConversation();
@@ -104,6 +106,10 @@ export function createEmptySession(title = "Desktop session"): ChatSession {
   };
 }
 
+/**
+ * Validates and migrates browser history, revives dates, and always resets connection state.
+ * A persisted Ready value is never trusted after page restoration.
+ */
 export function loadSessions(): ChatSession[] {
   try {
     const stored =
@@ -185,6 +191,7 @@ function redactEventImage(event: ToolEvent): ToolEvent {
   return event;
 }
 
+/** Persists compact Session history after removing screenshot payloads that could exhaust storage. */
 export function persistSessions(sessions: ChatSession[]) {
   const serializable = sessions.map((session) => ({
     ...session,

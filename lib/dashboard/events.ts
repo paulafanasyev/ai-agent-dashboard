@@ -115,6 +115,10 @@ function eventStatus(state: string, result: unknown): EventStatus {
   return "completed";
 }
 
+/**
+ * Idempotently projects streamed AI SDK tool parts into typed events.
+ * Existing toolCall IDs retain their original timestamp so duration remains meaningful.
+ */
 export function syncAgentEvents(
   sessionId: string,
   existingEvents: ToolEvent[],
@@ -221,6 +225,7 @@ export function syncAgentEvents(
   );
 }
 
+/** Derives observable agent state without claiming access to hidden chain-of-thought. */
 export function deriveAgentStatus(
   chatStatus: "error" | "submitted" | "streaming" | "ready",
   events: ToolEvent[],
@@ -232,6 +237,7 @@ export function deriveAgentStatus(
   return "idle";
 }
 
+/** Aggregates completed and pending actions for compact Debug Panel metrics. */
 export function eventCounts(events: AgentEvent[]) {
   return events.reduce<Record<string, number>>((counts, event) => {
     const key = event.kind === "bash" ? "bash" : event.action;
@@ -240,6 +246,7 @@ export function eventCounts(events: AgentEvent[]) {
   }, {});
 }
 
+/** Returns a concise label shared by timeline rows and activity surfaces. */
 export function eventLabel(event: AgentEvent) {
   if (event.kind === "bash") return "Bash command";
   if (event.kind === "runtime") {
@@ -254,6 +261,7 @@ export function eventLabel(event: AgentEvent) {
     .join(" ");
 }
 
+/** Creates a pending Sandbox/noVNC lifecycle event using the same envelope as tool events. */
 export function startRuntimeEvent(
   sessionId: string,
   action: RuntimeAction,
@@ -274,6 +282,7 @@ export function startRuntimeEvent(
   };
 }
 
+/** Completes a runtime event while preserving identity and calculating elapsed duration. */
 export function finishRuntimeEvent(
   event: RuntimeEvent,
   status: Exclude<EventStatus, "pending">,
@@ -288,6 +297,7 @@ export function finishRuntimeEvent(
   };
 }
 
+/** Merges Conversation tool events with Desktop runtime events in stable chronological order. */
 export function mergeEventTimeline(
   toolEvents: ToolEvent[],
   runtimeEvents: RuntimeEvent[],

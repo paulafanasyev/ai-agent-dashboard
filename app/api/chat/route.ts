@@ -56,6 +56,11 @@ const chatRequestSchema = z.object({
   modelConfig: modelConfigSchema.default({ provider: "anthropic" }),
 });
 
+/**
+ * Validates one chat turn, rechecks Desktop readiness, selects the provider/tool protocol,
+ * and returns the AI SDK data stream. The server repeats security checks even when the UI
+ * already disabled an unsupported model or reported the Desktop as Ready.
+ */
 export async function POST(req: Request) {
   let sandboxId: string | undefined;
 

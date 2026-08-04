@@ -10,12 +10,10 @@ import type { UIMessage } from "ai";
 import { Plus } from "lucide-react";
 import {
   memo,
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/input";
@@ -37,14 +35,14 @@ import type {
   ToolEvent,
 } from "@/lib/dashboard/types";
 import { openApiSettings } from "@/lib/dashboard/settings-events";
+import { useConversationQueue } from "@/lib/dashboard/use-conversation-queue";
+import { useConversationSync } from "@/lib/dashboard/use-conversation-sync";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
 import { ABORTED } from "@/lib/utils";
 import { AgentActivity } from "./agent-activity";
 import { ConversationSwitcher } from "./conversation-switcher";
 import { DebugPanel } from "./debug-panel";
 import { PromptQueue } from "./prompt-queue";
-
-const LIVE_SYNC_INTERVAL_MS = 100;
 
 interface ChatWorkspaceProps {
   sessionId: string;
@@ -103,19 +101,10 @@ function ChatWorkspaceComponent({
   const [containerRef, endRef] = useScrollToBottom();
   const eventsRef = useRef(initialEvents);
   const composerRef = useRef<HTMLInputElement>(null);
-  const lastSyncedMessagesRef = useRef<UIMessage[] | null>(null);
-  const lastSyncedEventsRef = useRef<ToolEvent[] | null>(null);
-  const pendingConversationSyncRef = useRef<{
-    messages: UIMessage[];
-    events: ToolEvent[];
-  } | null>(null);
-  const conversationSyncTimerRef = useRef<number | null>(null);
   const queueRef = useRef(initialQueuedPrompts);
   const runLockRef = useRef(false);
   const activePromptRef = useRef<QueuedPrompt | null>(null);
   const replaceQueueRef = useRef<(nextQueue: QueuedPrompt[]) => void>(() => {});
-  const [queuedPrompts, setQueuedPrompts] = useState(initialQueuedPrompts);
-
   const {
     messages,
     input,
@@ -172,6 +161,22 @@ function ChatWorkspaceComponent({
   );
   const isLoading = status === "submitted" || status === "streaming";
 
+  const { queuedPrompts, queueOrRunPrompt, removePrompt } =
+    useConversationQueue({
+      sessionId,
+      conversationId,
+      initialQueuedPrompts,
+      connectionReady,
+      isLoading,
+      modelConfigured,
+      append,
+      onQueueChange,
+      queueRef,
+      runLockRef,
+      activePromptRef,
+      replaceQueueRef,
+    });
+
   const requestApiConfiguration = useCallback(() => {
     toast.info("API key required", {
       description: "Choose a provider and add its API key before running a task.",
@@ -182,144 +187,20 @@ function ChatWorkspaceComponent({
     });
   }, []);
 
-  const replaceQueue = useCallback(
-    (nextQueue: QueuedPrompt[]) => {
-      queueRef.current = nextQueue;
-      setQueuedPrompts(nextQueue);
-      onQueueChange(sessionId, conversationId, nextQueue);
-    },
-    [conversationId, onQueueChange, sessionId],
-  );
-  replaceQueueRef.current = replaceQueue;
-
-  const queueOrRunPrompt = useCallback(
-    (value: string) => {
-      const text = value.trim();
-      if (!text) return;
-      if (!modelConfigured) {
-        toast.info("Configure BYOK before running a task", {
-          description: "Open Settings and add your provider API key.",
-        });
-        return;
-      }
-
-      const canRunNow =
-        connectionReady &&
-        !isLoading &&
-        !runLockRef.current &&
-        queueRef.current.length === 0;
-      if (canRunNow) {
-        activePromptRef.current = {
-          id: crypto.randomUUID(),
-          text,
-          createdAt: Date.now(),
-        };
-        runLockRef.current = true;
-        void append({ role: "user", content: text }).finally(() => {
-          runLockRef.current = false;
-          setQueuedPrompts((current) => [...current]);
-        });
-        return;
-      }
-
-      if (queueRef.current.length >= 20) {
-        toast.info("The task queue is full", {
-          description: "Remove a queued task before adding another.",
-        });
-        return;
-      }
-
-      replaceQueue([
-        ...queueRef.current,
-        { id: crypto.randomUUID(), text, createdAt: Date.now() },
-      ]);
-    },
-    [append, connectionReady, isLoading, modelConfigured, replaceQueue],
-  );
-
-  useEffect(() => {
-    if (
-      !connectionReady ||
-      !modelConfigured ||
-      isLoading ||
-      runLockRef.current ||
-      queueRef.current.length === 0
-    ) {
-      return;
-    }
-
-    const [nextPrompt, ...remaining] = queueRef.current;
-    activePromptRef.current = nextPrompt;
-    runLockRef.current = true;
-    replaceQueue(remaining);
-    void append({ role: "user", content: nextPrompt.text }).finally(() => {
-      runLockRef.current = false;
-      setQueuedPrompts((current) => [...current]);
-    });
-  }, [
-    append,
-    connectionReady,
-    isLoading,
-    modelConfigured,
-    queuedPrompts,
-    replaceQueue,
-  ]);
-
   useEffect(() => {
     onStatusChange(agentStatus);
   }, [agentStatus, onStatusChange]);
 
-  const flushConversationSync = useCallback(() => {
-    const pending = pendingConversationSyncRef.current;
-    if (!pending) return;
-    pendingConversationSyncRef.current = null;
-    lastSyncedMessagesRef.current = pending.messages;
-    lastSyncedEventsRef.current = pending.events;
-    startTransition(() => {
-      onConversationChange(
-        sessionId,
-        conversationId,
-        pending.messages,
-        pending.events,
-      );
-    });
-  }, [conversationId, onConversationChange, sessionId]);
+  useConversationSync({
+    sessionId,
+    conversationId,
+    messages,
+    events,
+    status,
+    onConversationChange,
+  });
 
-  useEffect(() => {
-    if (
-      lastSyncedMessagesRef.current === messages &&
-      lastSyncedEventsRef.current === events
-    ) {
-      return;
-    }
-    pendingConversationSyncRef.current = { messages, events };
-
-    if (status === "submitted" || status === "streaming") {
-      if (conversationSyncTimerRef.current === null) {
-        conversationSyncTimerRef.current = window.setTimeout(() => {
-          conversationSyncTimerRef.current = null;
-          flushConversationSync();
-        }, LIVE_SYNC_INTERVAL_MS);
-      }
-      return;
-    }
-
-    if (conversationSyncTimerRef.current !== null) {
-      window.clearTimeout(conversationSyncTimerRef.current);
-      conversationSyncTimerRef.current = null;
-    }
-    flushConversationSync();
-  }, [events, flushConversationSync, messages, status]);
-
-  useEffect(
-    () => () => {
-      if (conversationSyncTimerRef.current !== null) {
-        window.clearTimeout(conversationSyncTimerRef.current);
-      }
-    },
-    [],
-  );
-
+  /** Stops generation and resolves a pending tool invocation as aborted for a valid local timeline. */
   const stop = () => {
     activePromptRef.current = null;
     stopGeneration();
@@ -350,6 +231,7 @@ function ChatWorkspaceComponent({
     }
   };
 
+  /** Clears the composer immediately, then delegates safe run-versus-queue selection to the queue hook. */
   const submitComposer = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = input;
@@ -358,6 +240,7 @@ function ChatWorkspaceComponent({
     queueOrRunPrompt(value);
   };
 
+  /** Avoids accumulating empty Conversations by focusing the existing empty composer first. */
   const createOrFocusConversation = () => {
     const conversationIsEmpty =
       messages.length === 0 &&
@@ -444,11 +327,7 @@ function ChatWorkspaceComponent({
       <PromptQueue
         prompts={queuedPrompts}
         waitingForDesktop={!connectionReady}
-        onRemove={(promptId) =>
-          replaceQueue(
-            queueRef.current.filter((prompt) => prompt.id !== promptId),
-          )
-        }
+        onRemove={removePrompt}
       />
 
       <DebugPanel
@@ -494,6 +373,7 @@ function conversationNavigationEqual(
   );
 }
 
+/** Memoizes Conversation navigation props while keeping high-frequency AI streaming state local. */
 export const ChatWorkspace = memo(
   ChatWorkspaceComponent,
   (previous, next) =>

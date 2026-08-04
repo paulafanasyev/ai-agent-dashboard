@@ -422,6 +422,10 @@ function VncViewerComponent({
   );
 }
 
+/**
+ * Preserves the iframe connection unless identity-critical Desktop props change.
+ * Chat messages are deliberately absent from both props and the memo comparison.
+ */
 export const VncViewer = memo(
   VncViewerComponent,
   (previous, next) =>
