@@ -132,31 +132,6 @@
   --radius: 0.75rem;
 }
 
-[data-theme="codex"] {
-  --theme-background: #0c0e0d;
-  --surface: #121514;
-  --tone-50: #171b19;
-  --tone-100: #1d2320;
-  --tone-200: #2b332f;
-  --tone-300: #404b46;
-  --tone-400: #65716b;
-  --tone-500: #929d97;
-  --tone-600: #b7c0bb;
-  --tone-700: #d0d7d3;
-  --tone-800: #e3e8e5;
-  --tone-900: #f0f3f1;
-  --tone-950: #ffffff;
-  --brand-50: #0b2a21;
-  --brand-100: #0d3b2d;
-  --brand-200: #0f5942;
-  --brand-400: #10a37f;
-  --brand-500: #19c37d;
-  --brand-600: #4bd69d;
-  --brand-700: #8ae8c0;
-  --brand-contrast: #06150f;
-  --radius: 0.75rem;
-}
-
 [data-theme="xcode"] {
   --theme-background: #121214;
   --surface: #1c1c1e;

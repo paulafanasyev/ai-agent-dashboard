@@ -337,7 +337,6 @@ export function OnboardingTutorial({
               onClick={onSkip}
               className="-mr-1 -mt-1 flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-violet-400"
               aria-label="Skip tutorial"
-              title="Skip tutorial"
             >
               <X className="size-4" />
             </button>

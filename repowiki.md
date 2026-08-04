@@ -115,7 +115,7 @@ components/
     chat-workspace.tsx           AI SDK chat lifecycle and event synchronization
     conversation-switcher.tsx    Accessible custom conversation listbox
     dashboard-shell.tsx          Responsive presentation-only composition
-    desktop-session-item.tsx     Desktop row, tooltip, and action menu
+    desktop-session-item.tsx     Desktop row and action menu
     desktop-dialogs.tsx          Create, rename, and delete confirmation dialogs
     debug-panel.tsx              Collapsible event store and counters
     mobile-desktop-switcher.tsx  Mobile desktop navigation and status controls
@@ -124,7 +124,6 @@ components/
     tool-inspector.tsx           Expanded event details
     vnc-viewer.tsx               Memoized noVNC iframe
   ui/                            Shared shadcn-style primitives
-  button-tooltip-provider.tsx   Global button purpose tooltips
   input.tsx                      Chat composer
   message.tsx                    Messages and inline tool cards
   model-settings.tsx             Auto-saving API and theme settings panel
@@ -187,7 +186,7 @@ the VNC subtree from receiving token-level message state.
 `theme-provider.tsx` uses a named `data-theme` attribute and local browser
 storage to keep the selected interface across visits. `app/globals.css` maps
 semantic surface, neutral, brand, border, and radius tokens to dark Vercel, Vue,
-Codex, Xcode, and GitHub palettes. Every palette declares a dark browser color
+Xcode, and GitHub palettes. Every palette declares a dark browser color
 scheme and preserves neutral dark canvas and surface levels; theme identity
 comes primarily from accent, primary, text, contrast, and radius tokens rather
 than a tinted background or light-mode variant. Components consume those shared tokens, so streaming, session,
@@ -562,7 +561,6 @@ rendering boundaries:
 - Streaming assistant text renders as lightweight plain text and receives full Markdown formatting when the response completes.
 - Chat auto-scroll and draggable surfaces coalesce pointer or mutation bursts into one update per animation frame.
 - Off-screen messages use content visibility, while screenshots decode asynchronously and chat thumbnails load lazily.
-- Global button tooltip listeners are installed once for the lifetime of the page.
 
 ## 12. Event Pipeline
 

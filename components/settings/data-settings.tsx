@@ -152,7 +152,11 @@ export function DataSettings({ disabled, onClearAllData }: DataSettingsProps) {
 
             <div className="mt-5 space-y-2">
               <Label htmlFor="clear-data-confirmation">
-                Type <span className="font-mono text-zinc-900">{DELETE_ALL_CONFIRMATION_PHRASE}</span>
+                Type &quot;
+                <span className="font-mono text-zinc-900">
+                  {DELETE_ALL_CONFIRMATION_PHRASE}
+                </span>
+                &quot;
               </Label>
               <Input
                 ref={inputRef}

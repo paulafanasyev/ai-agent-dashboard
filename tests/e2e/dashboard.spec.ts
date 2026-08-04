@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const tutorialKey = "agent-desk-tutorial-v1-complete";
+const themeKey = "agent-desk-theme";
 
 test("first open tutorial can be skipped and stays completed", async ({ page }) => {
   await page.goto("/");
@@ -27,6 +28,62 @@ test("settings replays the tutorial", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("theme menu excludes Codex and migrates its cached preference", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    ({ tutorialStorageKey, themeStorageKey }) => {
+      localStorage.setItem(tutorialStorageKey, "complete");
+      localStorage.setItem(themeStorageKey, "codex");
+    },
+    { tutorialStorageKey: tutorialKey, themeStorageKey: themeKey },
+  );
+  await page.goto("/");
+
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), themeKey))
+    .toBe("vercel");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "vercel");
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: "Choose interface theme" }).click();
+  const themeList = page.getByRole("listbox", { name: "Interface themes" });
+  await expect(themeList.getByRole("option")).toHaveCount(4);
+  await expect(themeList.getByRole("option", { name: /Codex/ })).toHaveCount(0);
+});
+
+test("buttons do not show automatic tooltips", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+
+  const settingsButton = page.getByRole("button", { name: "Open settings" });
+  await expect(settingsButton).not.toHaveAttribute("title");
+  await settingsButton.hover();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await settingsButton.focus();
+  await page.waitForTimeout(250);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+});
+
+test("unconfigured composer links to API settings through a notification", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Configure API key" }).click();
+  await expect(page.getByText("API key required", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Configure", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "API Configuration" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Provider")).toBeVisible();
+});
+
 test("creates a named desktop without a live Sandbox dependency", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
   await page.goto("/");
@@ -37,6 +94,11 @@ test("creates a named desktop without a live Sandbox dependency", async ({ page 
     .getByRole("button", { name: "Create desktop", exact: true })
     .click();
   await expect(page.getByText("QA desktop", { exact: true }).first()).toBeVisible();
+
+  const notification = page.getByText("QA desktop created", { exact: true });
+  await expect(notification).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(notification).toHaveCount(0);
 });
 
 test("clears all sessions only after the exact confirmation phrase", async ({
@@ -63,11 +125,11 @@ test("clears all sessions only after the exact confirmation phrase", async ({
   });
   await expect(deleteButton).toBeDisabled();
   await confirmation
-    .getByLabel(/Type Delete all sessions and chats/)
+    .getByLabel(/Type "Delete all sessions and chats"/)
     .fill("Delete all sessions and chat");
   await expect(deleteButton).toBeDisabled();
   await confirmation
-    .getByLabel(/Type Delete all sessions and chats/)
+    .getByLabel(/Type "Delete all sessions and chats"/)
     .fill("Delete all sessions and chats");
   await expect(deleteButton).toBeEnabled();
   await deleteButton.click();
@@ -108,7 +170,7 @@ test("hosted settings require BYOK through one provider dropdown", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Open settings" }).click();
 
-  await expect(page.getByText("BYOK deployment")).toBeVisible();
+  await expect(page.getByText("BYOK deployment")).toHaveCount(0);
   await expect(page.getByText("Project Claude", { exact: true })).toHaveCount(0);
 
   const provider = page.getByLabel("Provider");

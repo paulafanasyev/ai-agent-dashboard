@@ -72,22 +72,6 @@ const THEME_DEFINITIONS: ThemeDefinition[] = [
     },
   },
   {
-    id: "codex",
-    label: "Codex",
-    description: "OpenAI graphite and code green",
-    palette: {
-      background: "#0c0e0d",
-      surface: "#121514",
-      elevated: "#1d2320",
-      border: "#2b332f",
-      text: "#f0f3f1",
-      muted: "#929d97",
-      accent: "#19c37d",
-      accentSoft: "#0d3b2d",
-      accentText: "#06150f",
-    },
-  },
-  {
     id: "xcode",
     label: "Xcode",
     description: "Apple graphite and system blue",

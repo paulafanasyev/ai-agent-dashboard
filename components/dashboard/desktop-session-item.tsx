@@ -1,6 +1,6 @@
 /**
  * File: components/dashboard/desktop-session-item.tsx
- * Purpose: Render one desktop navigation row, tooltip, and action menu.
+ * Purpose: Render one desktop navigation row and action menu.
  */
 "use client";
 
@@ -58,29 +58,14 @@ export function DesktopSessionItem({
   onSelect,
   onTogglePin,
 }: DesktopSessionItemProps) {
-  const rowRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [infoPosition, setInfoPosition] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
   const [menuPosition, setMenuPosition] = useState<{
     left: number;
     top: number;
   } | null>(null);
 
   const closeMenu = () => setMenuPosition(null);
-
-  const showInfo = () => {
-    if (menuPosition || isDragging) return;
-    const bounds = rowRef.current?.getBoundingClientRect();
-    if (!bounds) return;
-    setInfoPosition({
-      left: Math.min(bounds.right + 8, window.innerWidth - 208),
-      top: Math.max(8, Math.min(bounds.top, window.innerHeight - 76)),
-    });
-  };
 
   const toggleMenu = () => {
     if (menuPosition) {
@@ -89,7 +74,6 @@ export function DesktopSessionItem({
     }
     const bounds = menuButtonRef.current?.getBoundingClientRect();
     if (!bounds) return;
-    setInfoPosition(null);
     setMenuPosition({
       left: Math.min(bounds.right + 8, window.innerWidth - 168),
       top: Math.max(8, Math.min(bounds.top, window.innerHeight - 132)),
@@ -131,7 +115,6 @@ export function DesktopSessionItem({
   return (
     <div className={cn("relative py-0.5", showPinnedDivider && "pb-2.5")}>
       <div
-        ref={rowRef}
         className={cn(
           "group/session relative flex h-11 items-center gap-1 rounded-lg px-1 transition-colors",
           session.pinned
@@ -153,7 +136,6 @@ export function DesktopSessionItem({
           draggable={!dragDisabled}
           onClick={() => onSelect(session.id)}
           onDragStart={(event) => {
-            setInfoPosition(null);
             closeMenu();
             onDragStart(event);
           }}
@@ -161,10 +143,6 @@ export function DesktopSessionItem({
           onDragOver={onDragOver}
           onDrop={onDrop}
           onKeyDown={onKeyMove}
-          onMouseEnter={showInfo}
-          onMouseLeave={() => setInfoPosition(null)}
-          onFocus={showInfo}
-          onBlur={() => setInfoPosition(null)}
           disabled={disabled}
           aria-label={`Switch to ${session.title}`}
           aria-current={isActive ? "page" : undefined}
@@ -220,47 +198,6 @@ export function DesktopSessionItem({
       {showPinnedDivider ? (
         <div className="absolute bottom-1 left-1 right-1 h-px bg-violet-400/30" />
       ) : null}
-
-      {infoPosition && !isDragging
-        ? createPortal(
-            <div
-              role="tooltip"
-              style={infoPosition}
-              className="pointer-events-none fixed z-[95] w-48 animate-in fade-in slide-in-from-left-1 rounded-xl border border-zinc-200 bg-surface/95 px-3 py-2.5 shadow-2xl backdrop-blur-xl duration-150"
-            >
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-zinc-900">
-                  {session.title}
-                </span>
-                {session.pinned ? (
-                  <Pin className="size-3 shrink-0 rotate-45 text-violet-500" />
-                ) : null}
-              </div>
-              <div className="mt-1 flex items-center gap-1.5 text-[9px] capitalize text-zinc-500">
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    session.connectionStatus === "ready"
-                      ? "bg-emerald-500"
-                      : session.connectionStatus === "error" ||
-                          session.connectionStatus === "offline"
-                        ? "bg-red-500"
-                        : session.connectionStatus === "uninitialized"
-                          ? "bg-zinc-400"
-                          : "bg-amber-400",
-                  )}
-                />
-                <span>{session.connectionStatus}</span>
-                <span className="text-zinc-300">·</span>
-                <span>
-                  {session.conversations.length}{" "}
-                  {session.conversations.length === 1 ? "chat" : "chats"}
-                </span>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
 
       {menuPosition
         ? createPortal(
