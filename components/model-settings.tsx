@@ -22,9 +22,8 @@ import { SettingsNavItem } from "@/components/settings/settings-primitives";
 import { VncDiagnosticsSettings } from "@/components/settings/vnc-diagnostics-settings";
 import { ThemeSettings } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
-import type { ClientModelConfig } from "@/lib/ai/model-config";
+import type { ApiConfigProfile } from "@/lib/ai/model-config";
 import { OPEN_API_SETTINGS_EVENT } from "@/lib/dashboard/settings-events";
-import { useModelSettingsDraft } from "@/lib/dashboard/use-model-settings-draft";
 import type {
   VncClientDiagnostics,
   VncServerDiagnostics,
@@ -32,10 +31,14 @@ import type {
 import { cn } from "@/lib/utils";
 
 interface DashboardSettingsProps {
-  config: ClientModelConfig;
+  profiles: ApiConfigProfile[];
+  defaultConfigId: string | null;
   modelDisabled: boolean;
   trigger: "rail" | "icon";
-  onConfigChange: (config: ClientModelConfig) => void;
+  onCreateConfig: (profile: ApiConfigProfile) => void;
+  onUpdateConfig: (profile: ApiConfigProfile) => void;
+  onDeleteConfig: (profileId: string) => void;
+  onSetDefaultConfig: (profileId: string) => void;
   onReplayTutorial: () => void;
   onClearAllData: () => Promise<void>;
   vncClientDiagnostics: VncClientDiagnostics;
@@ -48,10 +51,14 @@ type SettingsSection = "api" | "appearance" | "tutorial" | "vnc" | "data";
 
 /** Composes Settings navigation while each section owns its own view and domain-specific state. */
 export function DashboardSettings({
-  config,
+  profiles,
+  defaultConfigId,
   modelDisabled,
   trigger,
-  onConfigChange,
+  onCreateConfig,
+  onUpdateConfig,
+  onDeleteConfig,
+  onSetDefaultConfig,
   onReplayTutorial,
   onClearAllData,
   vncClientDiagnostics,
@@ -62,15 +69,6 @@ export function DashboardSettings({
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("api");
-  const draft = useModelSettingsDraft({
-    config,
-    isOpen,
-    modelDisabled,
-    projectClaudeAvailable,
-    onConfigChange,
-  });
-  const resetDraft = draft.resetDraft;
-
   useEffect(() => {
     if (!isOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -81,10 +79,9 @@ export function DashboardSettings({
   }, [isOpen]);
 
   const open = useCallback(() => {
-    resetDraft();
     setActiveSection("api");
     setIsOpen(true);
-  }, [resetDraft]);
+  }, []);
 
   useEffect(() => {
     const openApiConfiguration = () => open();
@@ -127,7 +124,7 @@ export function DashboardSettings({
                   Settings
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  API and appearance changes are saved automatically.
+                  Manage API profiles, appearance, and workspace data.
                 </p>
               </div>
               <Button
@@ -197,10 +194,14 @@ export function DashboardSettings({
               <div className="min-h-0 overflow-y-auto">
                 {activeSection === "api" ? (
                   <ApiSettings
-                    config={config}
-                    draft={draft}
+                    profiles={profiles}
+                    defaultConfigId={defaultConfigId}
                     modelDisabled={modelDisabled}
                     projectClaudeAvailable={projectClaudeAvailable}
+                    onCreate={onCreateConfig}
+                    onUpdate={onUpdateConfig}
+                    onDelete={onDeleteConfig}
+                    onSetDefault={onSetDefaultConfig}
                   />
                 ) : activeSection === "appearance" ? (
                   <section

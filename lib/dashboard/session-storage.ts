@@ -34,6 +34,7 @@ const storedConversationSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   revision: z.number().default(0),
+  apiConfigId: z.string().nullable().default(null),
   messages: z.custom<UIMessage[]>((value) => Array.isArray(value)),
   events: z.custom<ToolEvent[]>((value) => Array.isArray(value)),
   queuedPrompts: z
@@ -84,7 +85,7 @@ function restoreMessages(messages: UIMessage[]) {
 }
 
 /** Creates an isolated Conversation record with no messages, events, or queued prompts. */
-export function createEmptyConversation(): ChatConversation {
+export function createEmptyConversation(apiConfigId: string | null = null): ChatConversation {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
@@ -92,6 +93,7 @@ export function createEmptyConversation(): ChatConversation {
     createdAt: now,
     updatedAt: now,
     revision: 0,
+    apiConfigId,
     messages: [],
     events: [],
     queuedPrompts: [],
@@ -174,6 +176,7 @@ export function loadSessions(): ChatSession[] {
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
             revision: session.conversationRevision,
+            apiConfigId: null,
             messages: restoreMessages(session.messages),
             events: session.events,
             queuedPrompts: [],

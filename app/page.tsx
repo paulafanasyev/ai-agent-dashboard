@@ -31,8 +31,8 @@ export default function DashboardPage() {
     activeSessionId,
     setActiveSessionId,
     activeSessionIdRef,
-    modelConfig,
-    setModelConfig,
+    apiConfigState,
+    setApiConfigState,
     isHydrated,
     clearLocalDashboardData,
   } = useDashboardPersistence();
@@ -100,19 +100,6 @@ export default function DashboardPage() {
     updatePromptQueue,
   } = sessionActions;
 
-  const {
-    projectClaudeAvailable,
-    modelConfigured,
-    modelSignature,
-    updateModelConfig,
-  } = useDashboardModelConfig({
-    modelConfig,
-    setModelConfig,
-    setSessions,
-    activeSessionIdRef,
-    setSelectedEventId,
-  });
-
   const activeSession = useMemo(
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
     [activeSessionId, sessions],
@@ -125,6 +112,26 @@ export default function DashboardPage() {
       ) ?? null,
     [activeSession],
   );
+
+  const {
+    projectClaudeAvailable,
+    modelConfig,
+    modelConfigured,
+    modelSignature,
+    selectableApiConfigs,
+    selectedApiConfigId,
+    createApiConfig,
+    updateApiConfig,
+    deleteApiConfig,
+    setDefaultApiConfig,
+    selectApiConfig,
+  } = useDashboardModelConfig({
+    apiConfigState,
+    setApiConfigState,
+    activeConversation,
+    setSessions,
+    activeSessionIdRef,
+  });
 
   const clearAllData = useCallback(async () => {
     if (agentStatus !== "idle") {
@@ -203,10 +210,14 @@ export default function DashboardPage() {
   const settingsControl = useMemo(
     () => (
       <DashboardSettings
-        config={modelConfig}
+        profiles={apiConfigState.profiles}
+        defaultConfigId={apiConfigState.defaultConfigId}
         modelDisabled={agentStatus !== "idle"}
         trigger="rail"
-        onConfigChange={updateModelConfig}
+        onCreateConfig={createApiConfig}
+        onUpdateConfig={updateApiConfig}
+        onDeleteConfig={deleteApiConfig}
+        onSetDefaultConfig={setDefaultApiConfig}
         onReplayTutorial={replayTutorial}
         onClearAllData={clearAllData}
         vncClientDiagnostics={vncClientDiagnostics}
@@ -218,12 +229,15 @@ export default function DashboardPage() {
     [
       agentStatus,
       clearAllData,
-      modelConfig,
+      apiConfigState,
+      createApiConfig,
+      deleteApiConfig,
       projectClaudeAvailable,
       refreshActiveDesktop,
       replayTutorial,
       runActiveDesktopDiagnostics,
-      updateModelConfig,
+      setDefaultApiConfig,
+      updateApiConfig,
       vncClientDiagnostics,
     ],
   );
@@ -251,10 +265,14 @@ export default function DashboardPage() {
   );
   const mobileSettings = (
     <DashboardSettings
-      config={modelConfig}
+      profiles={apiConfigState.profiles}
+      defaultConfigId={apiConfigState.defaultConfigId}
       modelDisabled={agentStatus !== "idle"}
       trigger="icon"
-      onConfigChange={updateModelConfig}
+      onCreateConfig={createApiConfig}
+      onUpdateConfig={updateApiConfig}
+      onDeleteConfig={deleteApiConfig}
+      onSetDefaultConfig={setDefaultApiConfig}
       onReplayTutorial={replayTutorial}
       onClearAllData={clearAllData}
       vncClientDiagnostics={vncClientDiagnostics}
@@ -278,6 +296,8 @@ export default function DashboardPage() {
       agentStatus={agentStatus}
       modelConfig={modelConfig}
       modelConfigured={modelConfigured}
+      apiConfigs={selectableApiConfigs}
+      selectedApiConfigId={selectedApiConfigId}
       vncDisplayMode={vncDisplayMode}
       settingsControl={settingsControl}
       dialogs={dialogs}
@@ -294,6 +314,7 @@ export default function DashboardPage() {
       onSelectConversation={selectConversation}
       onRenameConversation={renameConversation}
       onDeleteConversation={deleteConversation}
+      onSelectApiConfig={selectApiConfig}
       onSelectEvent={setSelectedEventId}
       onConversationChange={updateConversation}
       onQueueChange={updatePromptQueue}

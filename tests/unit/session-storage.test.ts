@@ -37,6 +37,7 @@ describe("session storage", () => {
 
   it("round-trips isolated conversations and runtime lifecycle events", () => {
     const session = createEmptySession("Research desktop");
+    session.conversations[0].apiConfigId = "deepseek-work";
     const runtimeEvent = startRuntimeEvent(
       session.id,
       "sandbox_create",
@@ -62,6 +63,16 @@ describe("session storage", () => {
       status: "completed",
       durationMs: 80,
     });
+    expect(restored[0].conversations[0].apiConfigId).toBe("deepseek-work");
+  });
+
+  it("migrates conversations without an API profile selection", () => {
+    const session = createEmptySession("Legacy desktop");
+    const stored = JSON.parse(JSON.stringify([session]));
+    delete stored[0].conversations[0].apiConfigId;
+    values.set(SESSION_STORAGE_KEY, JSON.stringify(stored));
+
+    expect(loadSessions()[0].conversations[0].apiConfigId).toBeNull();
   });
 
   it("treats an explicit empty snapshot as an intentional empty workspace", () => {

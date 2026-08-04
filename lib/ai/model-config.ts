@@ -5,7 +5,10 @@
  */
 export const DEFAULT_KIMI_MODEL_ID = "k3";
 export const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5-20250929";
+export const DEFAULT_DEEPSEEK_MODEL_ID = "deepseek-v4-flash";
 export const KIMI_BASE_URL = "https://api.kimi.com/coding/v1";
+export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+export const PROJECT_CLAUDE_CONFIG_ID = "project-claude";
 
 export type KimiReasoningEffort = "low" | "high" | "max";
 
@@ -25,6 +28,11 @@ export type ClientModelConfig =
       reasoningEffort: KimiReasoningEffort;
     }
   | {
+      provider: "deepseek";
+      apiKey: string;
+      modelId: string;
+    }
+  | {
       provider: "custom";
       apiKey: string;
       baseUrl: string;
@@ -36,6 +44,30 @@ export const DEFAULT_MODEL_CONFIG: ClientModelConfig = {
 };
 
 export const MODEL_SETTINGS_STORAGE_KEY = "ai-agent-dashboard:model-config";
+export const API_CONFIGS_STORAGE_KEY = "ai-agent-dashboard:api-configs:v1";
+
+export type ApiConfigProfile = {
+  id: string;
+  name: string;
+  config: Exclude<ClientModelConfig, { provider: "anthropic" }>;
+};
+
+export type ApiConfigState = {
+  profiles: ApiConfigProfile[];
+  defaultConfigId: string | null;
+};
+
+export type SelectableApiConfig = {
+  id: string;
+  name: string;
+  config: ClientModelConfig;
+  builtIn: boolean;
+};
+
+export const EMPTY_API_CONFIG_STATE: ApiConfigState = {
+  profiles: [],
+  defaultConfigId: null,
+};
 
 /** Narrows untrusted stored values to the reasoning levels accepted by the Kimi API. */
 export function isKimiReasoningEffort(
@@ -90,6 +122,7 @@ export function isSafeCustomBaseUrl(value: string) {
 /** Produces a credential-free provider/model label safe for rendering in Settings. */
 export function modelConfigLabel(config: ClientModelConfig) {
   if (config.provider === "kimi") return `Kimi · ${config.modelId}`;
+  if (config.provider === "deepseek") return `DeepSeek · ${config.modelId}`;
   if (config.provider === "custom") return config.modelId;
   if (config.provider === "anthropic-byok") {
     return `Anthropic · ${config.modelId}`;
@@ -137,6 +170,19 @@ export function parseStoredModelConfig(
   }
 
   if (
+    candidate.provider === "deepseek" &&
+    typeof candidate.apiKey === "string" &&
+    typeof candidate.modelId === "string" &&
+    candidate.modelId.trim().length > 0
+  ) {
+    return {
+      provider: "deepseek",
+      apiKey: candidate.apiKey,
+      modelId: candidate.modelId.trim(),
+    };
+  }
+
+  if (
     candidate.provider === "custom" &&
     typeof candidate.apiKey === "string" &&
     typeof candidate.baseUrl === "string" &&
@@ -153,4 +199,55 @@ export function parseStoredModelConfig(
   }
 
   return null;
+}
+
+/** Validates the tab-scoped multi-profile payload without allowing Project Claude into BYOK storage. */
+export function parseStoredApiConfigState(value: unknown): ApiConfigState | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (!Array.isArray(candidate.profiles)) return null;
+
+  const profiles: ApiConfigProfile[] = [];
+  const ids = new Set<string>();
+  for (const rawProfile of candidate.profiles) {
+    if (typeof rawProfile !== "object" || rawProfile === null) return null;
+    const profile = rawProfile as Record<string, unknown>;
+    if (
+      typeof profile.id !== "string" ||
+      !profile.id.trim() ||
+      ids.has(profile.id) ||
+      profile.id === PROJECT_CLAUDE_CONFIG_ID ||
+      typeof profile.name !== "string" ||
+      !profile.name.trim()
+    ) {
+      return null;
+    }
+    const config = parseStoredModelConfig(profile.config);
+    if (!config || config.provider === "anthropic") return null;
+    ids.add(profile.id);
+    profiles.push({
+      id: profile.id,
+      name: profile.name.trim().slice(0, 60),
+      config,
+    });
+  }
+
+  const storedDefault =
+    typeof candidate.defaultConfigId === "string"
+      ? candidate.defaultConfigId
+      : null;
+  const defaultConfigId =
+    storedDefault === PROJECT_CLAUDE_CONFIG_ID || ids.has(storedDefault ?? "")
+      ? storedDefault
+      : profiles[0]?.id ?? null;
+  return { profiles, defaultConfigId };
+}
+
+/** Gives a migrated single-provider setting a useful editable profile name. */
+export function defaultApiConfigName(config: ClientModelConfig) {
+  if (config.provider === "anthropic-byok") return "Anthropic";
+  if (config.provider === "kimi") return "Kimi";
+  if (config.provider === "deepseek") return "DeepSeek";
+  if (config.provider === "custom") return "Custom API";
+  return "Project Claude";
 }

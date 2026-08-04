@@ -1,7 +1,7 @@
 /**
  * File: app/api/chat/route.ts
  * Purpose: Stream model responses and dispatch computer-use tools.
- * Problem solved: Unifies Claude, Kimi, and custom BYOK requests behind one validated API endpoint.
+ * Problem solved: Unifies Claude, Kimi, DeepSeek, and custom BYOK requests behind one validated API endpoint.
  */
 import { streamText, type ToolSet, type UIMessage } from "ai";
 import { z } from "zod";
@@ -15,7 +15,10 @@ import {
   createOpenAICompatibleModel,
 } from "@/lib/ai/kimi";
 import { shouldStartWithVisibleComputer } from "@/lib/ai/browser-routing";
-import { isSafeCustomBaseUrl } from "@/lib/ai/model-config";
+import {
+  DEEPSEEK_BASE_URL,
+  isSafeCustomBaseUrl,
+} from "@/lib/ai/model-config";
 import { getServerModelCapabilities } from "@/lib/ai/runtime-policy";
 import { checkDesktopHealth } from "@/lib/sandbox/utils";
 import { bashTool, computerTool } from "@/lib/sandbox/tool";
@@ -40,6 +43,11 @@ const modelConfigSchema = z.discriminatedUnion("provider", [
     apiKey: z.string().trim().min(8).max(512),
     modelId: z.string().trim().min(1).max(200),
     reasoningEffort: z.enum(["low", "high", "max"]),
+  }),
+  z.object({
+    provider: z.literal("deepseek"),
+    apiKey: z.string().trim().min(8).max(512),
+    modelId: z.string().trim().min(1).max(200),
   }),
   z.object({
     provider: z.literal("custom"),
@@ -101,6 +109,13 @@ export async function POST(req: Request) {
         ? createKimiModel(modelConfig.apiKey, modelConfig.modelId)
         : modelConfig.provider === "anthropic-byok"
           ? createAnthropicByokModel(modelConfig.apiKey, modelConfig.modelId)
+        : modelConfig.provider === "deepseek"
+          ? createOpenAICompatibleModel({
+              apiKey: modelConfig.apiKey,
+              baseUrl: DEEPSEEK_BASE_URL,
+              modelId: modelConfig.modelId,
+              providerName: "deepseek",
+            })
         : modelConfig.provider === "custom"
           ? createOpenAICompatibleModel({
               apiKey: modelConfig.apiKey,

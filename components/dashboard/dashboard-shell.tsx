@@ -22,7 +22,10 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { ClientModelConfig } from "@/lib/ai/model-config";
+import type {
+  ClientModelConfig,
+  SelectableApiConfig,
+} from "@/lib/ai/model-config";
 import type {
   AgentEvent,
   AgentStatus,
@@ -46,6 +49,8 @@ interface DashboardShellProps {
   agentStatus: AgentStatus;
   modelConfig: ClientModelConfig;
   modelConfigured: boolean;
+  apiConfigs: SelectableApiConfig[];
+  selectedApiConfigId: string | null;
   vncDisplayMode: VncDisplayMode;
   settingsControl: ReactNode;
   dialogs: ReactNode;
@@ -64,6 +69,7 @@ interface DashboardShellProps {
   onSelectConversation: (conversationId: string) => void;
   onRenameConversation: (conversationId: string, name: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  onSelectApiConfig: (profileId: string) => void;
   onSelectEvent: (eventId: string | null) => void;
   onConversationChange: (
     sessionId: string,
@@ -175,6 +181,8 @@ export function DashboardShell(props: DashboardShellProps) {
       initialQueuedPrompts={conversation.queuedPrompts}
       modelConfig={props.modelConfig}
       modelConfigured={props.modelConfigured}
+      apiConfigs={props.apiConfigs}
+      selectedApiConfigId={props.selectedApiConfigId}
       connectionReady={session.connectionStatus === "ready"}
       connectionStatus={session.connectionStatus}
       selectedEventId={props.selectedEventId}
@@ -182,6 +190,7 @@ export function DashboardShell(props: DashboardShellProps) {
       onSelectConversation={props.onSelectConversation}
       onRenameConversation={props.onRenameConversation}
       onDeleteConversation={props.onDeleteConversation}
+      onSelectApiConfig={props.onSelectApiConfig}
       onSelectEvent={props.onSelectEvent}
       onConversationChange={props.onConversationChange}
       onQueueChange={props.onQueueChange}

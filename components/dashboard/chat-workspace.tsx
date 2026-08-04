@@ -20,7 +20,10 @@ import { Input } from "@/components/input";
 import { PreviewMessage } from "@/components/message";
 import { ProjectInfo } from "@/components/project-info";
 import { PromptSuggestions } from "@/components/prompt-suggestions";
-import type { ClientModelConfig } from "@/lib/ai/model-config";
+import type {
+  ClientModelConfig,
+  SelectableApiConfig,
+} from "@/lib/ai/model-config";
 import {
   deriveAgentStatus,
   mergeEventTimeline,
@@ -56,6 +59,8 @@ interface ChatWorkspaceProps {
   initialQueuedPrompts: QueuedPrompt[];
   modelConfig: ClientModelConfig;
   modelConfigured: boolean;
+  apiConfigs: SelectableApiConfig[];
+  selectedApiConfigId: string | null;
   connectionReady: boolean;
   connectionStatus: ConnectionStatus;
   selectedEventId: string | null;
@@ -63,6 +68,7 @@ interface ChatWorkspaceProps {
   onSelectConversation: (conversationId: string) => void;
   onRenameConversation: (conversationId: string, name: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  onSelectApiConfig: (profileId: string) => void;
   onSelectEvent: (eventId: string) => void;
   onConversationChange: (
     sessionId: string,
@@ -90,6 +96,8 @@ function ChatWorkspaceComponent({
   initialQueuedPrompts,
   modelConfig,
   modelConfigured,
+  apiConfigs,
+  selectedApiConfigId,
   connectionReady,
   connectionStatus,
   selectedEventId,
@@ -97,6 +105,7 @@ function ChatWorkspaceComponent({
   onSelectConversation,
   onRenameConversation,
   onDeleteConversation,
+  onSelectApiConfig,
   onSelectEvent,
   onConversationChange,
   onQueueChange,
@@ -361,6 +370,9 @@ function ChatWorkspaceComponent({
             isLoading={isLoading}
             hasQueuedPrompts={queuedPrompts.length > 0}
             modelConfigured={modelConfigured}
+            apiConfigs={apiConfigs}
+            selectedApiConfigId={selectedApiConfigId}
+            onSelectApiConfig={onSelectApiConfig}
             onConfigureApiKey={requestApiConfiguration}
             stop={stop}
           />
@@ -398,12 +410,15 @@ export const ChatWorkspace = memo(
     previous.sandboxId === next.sandboxId &&
     previous.modelConfig === next.modelConfig &&
     previous.modelConfigured === next.modelConfigured &&
+    previous.apiConfigs === next.apiConfigs &&
+    previous.selectedApiConfigId === next.selectedApiConfigId &&
     previous.connectionReady === next.connectionReady &&
     previous.connectionStatus === next.connectionStatus &&
     previous.runtimeEvents === next.runtimeEvents &&
     previous.selectedEventId === next.selectedEventId &&
     previous.onCreateConversation === next.onCreateConversation &&
     previous.onSelectConversation === next.onSelectConversation &&
+    previous.onSelectApiConfig === next.onSelectApiConfig &&
     previous.onSelectEvent === next.onSelectEvent &&
     previous.onConversationChange === next.onConversationChange &&
     previous.onQueueChange === next.onQueueChange &&

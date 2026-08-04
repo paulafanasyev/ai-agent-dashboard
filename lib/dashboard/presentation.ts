@@ -6,9 +6,12 @@
 import type { UIMessage } from "ai";
 import type { ClientModelConfig } from "@/lib/ai/model-config";
 
-/** Identifies provider endpoint changes that require remounting and clearing the active chat. */
+/** Identifies provider endpoint changes that require remounting the active chat controller. */
 export function modelEndpointSignature(config: ClientModelConfig) {
   if (config.provider === "kimi") return `${config.provider}:${config.modelId}`;
+  if (config.provider === "deepseek") {
+    return `${config.provider}:${config.modelId}`;
+  }
   if (config.provider === "anthropic-byok") {
     return `${config.provider}:${config.modelId}`;
   }
