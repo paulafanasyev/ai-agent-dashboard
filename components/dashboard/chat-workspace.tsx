@@ -56,6 +56,7 @@ interface ChatWorkspaceProps {
   runtimeEvents: RuntimeEvent[];
   initialQueuedPrompts: QueuedPrompt[];
   modelConfig: ClientModelConfig;
+  modelConfigured: boolean;
   connectionReady: boolean;
   connectionStatus: ConnectionStatus;
   selectedEventId: string | null;
@@ -87,6 +88,7 @@ function ChatWorkspaceComponent({
   runtimeEvents,
   initialQueuedPrompts,
   modelConfig,
+  modelConfigured,
   connectionReady,
   connectionStatus,
   selectedEventId,
@@ -183,6 +185,12 @@ function ChatWorkspaceComponent({
     (value: string) => {
       const text = value.trim();
       if (!text) return;
+      if (!modelConfigured) {
+        toast.info("Configure BYOK before running a task", {
+          description: "Open Settings and add your provider API key.",
+        });
+        return;
+      }
 
       const canRunNow =
         connectionReady &&
@@ -215,12 +223,13 @@ function ChatWorkspaceComponent({
         { id: crypto.randomUUID(), text, createdAt: Date.now() },
       ]);
     },
-    [append, connectionReady, isLoading, replaceQueue],
+    [append, connectionReady, isLoading, modelConfigured, replaceQueue],
   );
 
   useEffect(() => {
     if (
       !connectionReady ||
+      !modelConfigured ||
       isLoading ||
       runLockRef.current ||
       queueRef.current.length === 0
@@ -236,7 +245,14 @@ function ChatWorkspaceComponent({
       runLockRef.current = false;
       setQueuedPrompts((current) => [...current]);
     });
-  }, [append, connectionReady, isLoading, queuedPrompts, replaceQueue]);
+  }, [
+    append,
+    connectionReady,
+    isLoading,
+    modelConfigured,
+    queuedPrompts,
+    replaceQueue,
+  ]);
 
   useEffect(() => {
     onStatusChange(agentStatus);
@@ -401,7 +417,7 @@ function ChatWorkspaceComponent({
 
       {messages.length === 0 ? (
         <PromptSuggestions
-          disabled={false}
+          disabled={!modelConfigured}
           onSelectPrompt={selectPresetPrompt}
         />
       ) : null}
@@ -439,6 +455,7 @@ function ChatWorkspaceComponent({
             isInitializing={!connectionReady}
             isLoading={isLoading}
             hasQueuedPrompts={queuedPrompts.length > 0}
+            modelConfigured={modelConfigured}
             stop={stop}
           />
         </form>
@@ -473,6 +490,7 @@ export const ChatWorkspace = memo(
     previous.conversationRevision === next.conversationRevision &&
     previous.sandboxId === next.sandboxId &&
     previous.modelConfig === next.modelConfig &&
+    previous.modelConfigured === next.modelConfigured &&
     previous.connectionReady === next.connectionReady &&
     previous.connectionStatus === next.connectionStatus &&
     previous.runtimeEvents === next.runtimeEvents &&

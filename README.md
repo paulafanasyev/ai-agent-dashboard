@@ -25,8 +25,8 @@ are implemented on `main`.
 ## Features
 
 - Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
-- Anthropic Claude, Kimi K3 BYOK, or a custom OpenAI-compatible model with computer-use and bash tool capabilities.
-- Browser-side BYOK configuration with Kimi and custom presets; the key is kept in tab-scoped `sessionStorage`.
+- Local Project Claude or hosted BYOK through Anthropic, Kimi, and OpenAI-compatible providers, all with computer-use and bash tool capabilities.
+- One provider dropdown for browser-side BYOK; the key is kept in tab-scoped `sessionStorage`.
 - Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
 - Mobile stacked workspace with the live VNC desktop above the always-available conversation composer and desktop switching at the top.
 - One-click VNC minimization and draggable, viewport-constrained picture-in-picture without recreating the remote desktop iframe.
@@ -95,7 +95,7 @@ Desktop session ──→ Conversations ──→ AI SDK ──→ Claude / Kimi
 The reviewed production build is available at the [live deployment](https://ai-agent-dashboard-fawn-ten.vercel.app).
 Deploy your own copy from this repository with the button below:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=ai-agent-dashboard&repository-name=ai-agent-dashboard&repository-url=https%3A%2F%2Fgithub.com%2FCHENG-LIANG1%2Fai-agent-dashboard&demo-title=AI%20Agent%20Dashboard&demo-url=https%3A%2F%2Fai-agent-dashboard-fawn-ten.vercel.app&env=ANTHROPIC_API_KEY,SANDBOX_SNAPSHOT_ID)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=ai-agent-dashboard&repository-name=ai-agent-dashboard&repository-url=https%3A%2F%2Fgithub.com%2FCHENG-LIANG1%2Fai-agent-dashboard&demo-title=AI%20Agent%20Dashboard&demo-url=https%3A%2F%2Fai-agent-dashboard-fawn-ten.vercel.app&env=SANDBOX_SNAPSHOT_ID)
 
 ## Running Locally
 
@@ -103,7 +103,7 @@ Deploy your own copy from this repository with the button below:
 
 - Node.js 20.19+
 - A [Vercel](https://vercel.com) account (for Sandbox access)
-- An [Anthropic API key](https://console.anthropic.com/) for the project default, or a Kimi API key supplied through BYOK
+- A personal provider API key supplied through BYOK; local development may instead use an [Anthropic API key](https://console.anthropic.com/) from `.env.local`
 
 ### 1. Install dependencies
 
@@ -139,11 +139,16 @@ This takes ~10 minutes. When done, it outputs a snapshot ID. Add it to your `.en
 SANDBOX_SNAPSHOT_ID=snap_xxxxxxxxxxxxx
 ```
 
-### 4. Add your Anthropic API key
+### 4. Add your local Anthropic API key
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+`Project Claude` is available only during local development. Production and
+other hosted builds are BYOK-only even if a shared Anthropic key is present in
+their environment, preventing public visitors from spending the operator's
+Claude credits.
 
 To use an Anthropic-compatible gateway, configure its Messages API prefix and
 the model ID exposed by that gateway:
@@ -164,11 +169,12 @@ Open [http://localhost:3000](http://localhost:3000) to use the computer use agen
 ### Use BYOK
 
 Open **Settings** at the bottom-left of the desktop rail, select **BYOK**, then
-choose Kimi or Custom. Valid changes are saved automatically; there is no
-separate save action.
+choose a provider from the single dropdown. Valid changes are saved
+automatically; there is no separate save action.
 
-- **Kimi Code** uses `https://api.kimi.com/coding/v1`; its model ID is configurable and defaults to `k3`.
-- **Custom** accepts a public HTTPS OpenAI-compatible Base URL and model ID.
+- **Anthropic** uses the official Messages API and accepts a Claude model ID.
+- **Kimi** is a preset for `https://api.kimi.com/coding/v1`; its model ID defaults to `k3`.
+- **OpenAI-compatible** accepts a public HTTPS Base URL and model ID.
 
 The key is stored only in the current tab's `sessionStorage`, sent to this app's
 `/api/chat` route for server-side forwarding, and removed when the tab is closed.
@@ -191,13 +197,14 @@ pnpm test:e2e
 
 The browser suite covers first-open tutorial persistence, replay from Settings,
 named Desktop creation, phrase-confirmed cache deletion, and VNC diagnostics at
-desktop and mobile breakpoints without requiring a live Sandbox credential.
+desktop and mobile breakpoints. It also verifies the hosted BYOK-only provider
+dropdown and tab-scoped Anthropic key storage without a live Sandbox credential.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Anthropic API key for Claude |
+| `ANTHROPIC_API_KEY` | Local only | Anthropic API key for local-development Project Claude; hosted builds require BYOK |
 | `ANTHROPIC_BASE_URL` | No | Anthropic-compatible Messages API prefix; defaults to the official Anthropic API |
 | `ANTHROPIC_MODEL` | No | Provider model ID; defaults to the starter project's Claude Sonnet 4.5 model |
 | `SANDBOX_SNAPSHOT_ID` | Yes | Vercel Sandbox snapshot with the desktop environment |

@@ -4,6 +4,7 @@
  * Problem solved: Keeps BYOK provider data safe, typed, and compatible across browser sessions.
  */
 export const DEFAULT_KIMI_MODEL_ID = "k3";
+export const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5-20250929";
 export const KIMI_BASE_URL = "https://api.kimi.com/coding/v1";
 
 export type KimiReasoningEffort = "low" | "high" | "max";
@@ -11,6 +12,11 @@ export type KimiReasoningEffort = "low" | "high" | "max";
 export type ClientModelConfig =
   | {
       provider: "anthropic";
+    }
+  | {
+      provider: "anthropic-byok";
+      apiKey: string;
+      modelId: string;
     }
   | {
       provider: "kimi";
@@ -79,6 +85,9 @@ export function isSafeCustomBaseUrl(value: string) {
 export function modelConfigLabel(config: ClientModelConfig) {
   if (config.provider === "kimi") return `Kimi · ${config.modelId}`;
   if (config.provider === "custom") return config.modelId;
+  if (config.provider === "anthropic-byok") {
+    return `Anthropic · ${config.modelId}`;
+  }
   return "Claude";
 }
 
@@ -89,6 +98,19 @@ export function parseStoredModelConfig(
 
   const candidate = value as Record<string, unknown>;
   if (candidate.provider === "anthropic") return { provider: "anthropic" };
+
+  if (
+    candidate.provider === "anthropic-byok" &&
+    typeof candidate.apiKey === "string" &&
+    typeof candidate.modelId === "string" &&
+    candidate.modelId.trim().length > 0
+  ) {
+    return {
+      provider: "anthropic-byok",
+      apiKey: candidate.apiKey,
+      modelId: candidate.modelId.trim(),
+    };
+  }
 
   if (
     candidate.provider === "kimi" &&

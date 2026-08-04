@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  DEFAULT_ANTHROPIC_MODEL_ID,
   DEFAULT_KIMI_MODEL_ID,
   KIMI_BASE_URL,
   isSafeCustomBaseUrl,
@@ -55,14 +56,22 @@ interface DashboardSettingsProps {
   vncClientDiagnostics: VncClientDiagnostics;
   onRunVncDiagnostics: () => Promise<VncServerDiagnostics>;
   onReconnectVnc: () => void;
+  projectClaudeAvailable: boolean;
 }
 
 type AccessMode = "project" | "byok";
-type ByokProvider = "kimi" | "custom";
+type ByokProvider = "anthropic-byok" | "kimi" | "custom";
 type SettingsSection = "api" | "appearance" | "tutorial" | "vnc" | "data";
 
 function sameConfig(left: ClientModelConfig, right: ClientModelConfig) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function byokProviderForConfig(config: ClientModelConfig): ByokProvider {
+  if (config.provider === "anthropic-byok") return "anthropic-byok";
+  if (config.provider === "kimi") return "kimi";
+  if (config.provider === "custom") return "custom";
+  return "anthropic-byok";
 }
 
 export function DashboardSettings({
@@ -75,13 +84,16 @@ export function DashboardSettings({
   vncClientDiagnostics,
   onRunVncDiagnostics,
   onReconnectVnc,
+  projectClaudeAvailable,
 }: DashboardSettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [accessMode, setAccessMode] = useState<AccessMode>(
-    config.provider === "anthropic" ? "project" : "byok",
+    config.provider === "anthropic" && projectClaudeAvailable
+      ? "project"
+      : "byok",
   );
   const [byokProvider, setByokProvider] = useState<ByokProvider>(
-    config.provider === "custom" ? "custom" : "kimi",
+    byokProviderForConfig(config),
   );
   const [apiKey, setApiKey] = useState(
     config.provider !== "anthropic" ? config.apiKey : "",
@@ -92,6 +104,11 @@ export function DashboardSettings({
     );
   const [kimiModelId, setKimiModelId] = useState(
     config.provider === "kimi" ? config.modelId : DEFAULT_KIMI_MODEL_ID,
+  );
+  const [anthropicModelId, setAnthropicModelId] = useState(
+    config.provider === "anthropic-byok"
+      ? config.modelId
+      : DEFAULT_ANTHROPIC_MODEL_ID,
   );
   const [customBaseUrl, setCustomBaseUrl] = useState(
     config.provider === "custom" ? config.baseUrl : "",
@@ -108,12 +125,30 @@ export function DashboardSettings({
     { config: ClientModelConfig; error: null } | { config: null; error: string }
   >(() => {
     if (accessMode === "project") {
+      if (!projectClaudeAvailable) {
+        return { config: null, error: "Project Claude is unavailable here." };
+      }
       return { config: { provider: "anthropic" }, error: null };
     }
 
     const trimmedKey = apiKey.trim();
     if (trimmedKey.length < 8) {
       return { config: null, error: "Enter an API key with at least 8 characters." };
+    }
+
+    if (byokProvider === "anthropic-byok") {
+      const modelId = anthropicModelId.trim();
+      if (!modelId) {
+        return { config: null, error: "Enter the Anthropic model ID." };
+      }
+      return {
+        config: {
+          provider: "anthropic-byok",
+          apiKey: trimmedKey,
+          modelId,
+        },
+        error: null,
+      };
     }
 
     if (byokProvider === "custom") {
@@ -149,11 +184,13 @@ export function DashboardSettings({
     };
   }, [
     accessMode,
+    anthropicModelId,
     apiKey,
     byokProvider,
     customBaseUrl,
     customModelId,
     kimiModelId,
+    projectClaudeAvailable,
     reasoningEffort,
   ]);
 
@@ -185,14 +222,23 @@ export function DashboardSettings({
   }, [isOpen]);
 
   const open = () => {
-    setAccessMode(config.provider === "anthropic" ? "project" : "byok");
-    setByokProvider(config.provider === "custom" ? "custom" : "kimi");
+    setAccessMode(
+      config.provider === "anthropic" && projectClaudeAvailable
+        ? "project"
+        : "byok",
+    );
+    setByokProvider(byokProviderForConfig(config));
     setApiKey(config.provider !== "anthropic" ? config.apiKey : "");
     setReasoningEffort(
       config.provider === "kimi" ? config.reasoningEffort : "high",
     );
     setKimiModelId(
       config.provider === "kimi" ? config.modelId : DEFAULT_KIMI_MODEL_ID,
+    );
+    setAnthropicModelId(
+      config.provider === "anthropic-byok"
+        ? config.modelId
+        : DEFAULT_ANTHROPIC_MODEL_ID,
     );
     setCustomBaseUrl(config.provider === "custom" ? config.baseUrl : "");
     setCustomModelId(config.provider === "custom" ? config.modelId : "");
@@ -324,7 +370,11 @@ export function DashboardSettings({
                       API Configuration
                     </h3>
                     <p className="mt-1 text-[10px] text-zinc-500">
-                      Current: {modelConfigLabel(config)}
+                      Current:{" "}
+                      {config.provider === "anthropic" &&
+                      !projectClaudeAvailable
+                        ? "BYOK required"
+                        : modelConfigLabel(config)}
                     </p>
                   </div>
                   <SaveStatus
@@ -334,29 +384,46 @@ export function DashboardSettings({
                 </div>
 
                 <fieldset disabled={apiControlsDisabled} className="space-y-4">
-                  <SettingsChoice
-                    label="Access method"
-                    options={[
-                      { value: "project", label: "Project Claude" },
-                      { value: "byok", label: "BYOK" },
-                    ]}
-                    value={accessMode}
-                    onChange={(value) => setAccessMode(value as AccessMode)}
-                  />
+                  {projectClaudeAvailable ? (
+                    <SettingsChoice
+                      label="Access method"
+                      options={[
+                        { value: "project", label: "Project Claude" },
+                        { value: "byok", label: "BYOK" },
+                      ]}
+                      value={accessMode}
+                      onChange={(value) => setAccessMode(value as AccessMode)}
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-3">
+                      <p className="text-[11px] font-semibold text-violet-300">
+                        BYOK deployment
+                      </p>
+                      <p className="mt-1 text-[10px] leading-4 text-zinc-500">
+                        Hosted builds never use a shared project Claude key.
+                        Choose a provider and use your own credentials for this
+                        browser tab.
+                      </p>
+                    </div>
+                  )}
 
                   {isByok ? (
                     <>
-                      <SettingsChoice
-                        label="Provider"
-                        options={[
-                          { value: "kimi", label: "Kimi" },
-                          { value: "custom", label: "Custom" },
-                        ]}
-                        value={byokProvider}
-                        onChange={(value) =>
-                          setByokProvider(value as ByokProvider)
-                        }
-                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="byok-provider">Provider</Label>
+                        <select
+                          id="byok-provider"
+                          value={byokProvider}
+                          onChange={(event) =>
+                            setByokProvider(event.target.value as ByokProvider)
+                          }
+                          className="flex h-9 w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 text-xs text-zinc-900 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-violet-400"
+                        >
+                          <option value="anthropic-byok">Anthropic</option>
+                          <option value="kimi">Kimi</option>
+                          <option value="custom">OpenAI-compatible</option>
+                        </select>
+                      </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="byok-api-key">API Key</Label>
@@ -386,7 +453,24 @@ export function DashboardSettings({
                         </div>
                       </div>
 
-                      {byokProvider === "kimi" ? (
+                      {byokProvider === "anthropic-byok" ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="anthropic-model-id">Model ID</Label>
+                          <Input
+                            id="anthropic-model-id"
+                            value={anthropicModelId}
+                            onChange={(event) =>
+                              setAnthropicModelId(event.target.value)
+                            }
+                            placeholder={DEFAULT_ANTHROPIC_MODEL_ID}
+                            spellCheck={false}
+                            className="font-mono"
+                          />
+                          <p className="text-[10px] leading-4 text-zinc-500">
+                            Uses the official Anthropic Messages API.
+                          </p>
+                        </div>
+                      ) : byokProvider === "kimi" ? (
                         <div className="space-y-3">
                           <div className="space-y-2">
                             <Label>Kimi Base URL</Label>

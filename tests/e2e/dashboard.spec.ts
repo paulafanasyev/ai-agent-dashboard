@@ -100,3 +100,37 @@ test("runs VNC diagnostics without exposing infrastructure secrets", async ({
   await expect(page.getByText(/snap_[A-Za-z0-9]+/)).toHaveCount(0);
   await expect(page.getByText(/VERCEL_(?:OIDC_)?TOKEN=/)).toHaveCount(0);
 });
+
+test("hosted settings require BYOK through one provider dropdown", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+
+  await expect(page.getByText("BYOK deployment")).toBeVisible();
+  await expect(page.getByText("Project Claude", { exact: true })).toHaveCount(0);
+
+  const provider = page.getByLabel("Provider");
+  await expect(provider).toHaveValue("anthropic-byok");
+  await expect(provider.locator("option")).toHaveText([
+    "Anthropic",
+    "Kimi",
+    "OpenAI-compatible",
+  ]);
+
+  await page
+    .getByRole("textbox", { name: "API Key" })
+    .fill("sk-ant-e2e-browser-only");
+  await page.getByLabel("Model ID").fill("claude-test-model");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:model-config"),
+      ),
+    )
+    .toContain('"provider":"anthropic-byok"');
+  await expect
+    .poll(() => page.evaluate(() => JSON.stringify(localStorage)))
+    .not.toContain("sk-ant-e2e-browser-only");
+});

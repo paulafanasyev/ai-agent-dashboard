@@ -7,7 +7,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { DesktopDialogStack } from "@/components/dashboard/desktop-dialogs";
@@ -18,6 +18,7 @@ import {
   MODEL_SETTINGS_STORAGE_KEY,
   type ClientModelConfig,
 } from "@/lib/ai/model-config";
+import { getModelCapabilities } from "@/lib/ai/capabilities";
 import { mergeEventTimeline } from "@/lib/dashboard/events";
 import {
   firstUserMessageTitle,
@@ -58,9 +59,24 @@ export default function DashboardPage() {
   const [isCreateDesktopOpen, setIsCreateDesktopOpen] = useState(false);
   const [deleteDesktopId, setDeleteDesktopId] = useState<string | null>(null);
   const [renameDesktopId, setRenameDesktopId] = useState<string | null>(null);
+  const [projectClaudeAvailable, setProjectClaudeAvailable] = useState(false);
   const isDesktop = useDesktopLayout();
   const { isTutorialOpen, closeTutorial, replayTutorial } =
     useDashboardTutorial(isHydrated);
+
+  useEffect(() => {
+    let active = true;
+    void getModelCapabilities()
+      .then((capabilities) => {
+        if (active) {
+          setProjectClaudeAvailable(capabilities.projectClaudeAvailable);
+        }
+      })
+      .catch(() => {
+        if (active) setProjectClaudeAvailable(false);
+      });
+    return () => void (active = false);
+  }, []);
 
   const {
     streamUrls,
@@ -559,6 +575,7 @@ export default function DashboardPage() {
         vncClientDiagnostics={vncClientDiagnostics}
         onRunVncDiagnostics={runActiveDesktopDiagnostics}
         onReconnectVnc={refreshActiveDesktop}
+        projectClaudeAvailable={projectClaudeAvailable}
       />
     ),
     [
@@ -567,6 +584,7 @@ export default function DashboardPage() {
       modelConfig,
       replayTutorial,
       refreshActiveDesktop,
+      projectClaudeAvailable,
       runActiveDesktopDiagnostics,
       updateModelConfig,
       vncClientDiagnostics,
@@ -607,6 +625,7 @@ export default function DashboardPage() {
       vncClientDiagnostics={vncClientDiagnostics}
       onRunVncDiagnostics={runActiveDesktopDiagnostics}
       onReconnectVnc={refreshActiveDesktop}
+      projectClaudeAvailable={projectClaudeAvailable}
     />
   );
 
@@ -623,6 +642,9 @@ export default function DashboardPage() {
       activityEvent={activityEvent}
       agentStatus={agentStatus}
       modelConfig={modelConfig}
+      modelConfigured={
+        modelConfig.provider !== "anthropic" || projectClaudeAvailable
+      }
       vncDisplayMode={vncDisplayMode}
       settingsControl={settingsControl}
       dialogs={dialogs}

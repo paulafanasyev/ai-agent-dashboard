@@ -25,7 +25,7 @@ The repository extends the Vercel Labs AI SDK Computer Use starter with:
 - A collapsible event timeline and derived activity counters.
 - Browser-local desktop sessions with multiple conversations per desktop.
 - Memoized VNC rendering isolated from streaming chat updates.
-- Claude, Kimi, and custom OpenAI-compatible model configuration.
+- Local Project Claude plus hosted BYOK for Anthropic, Kimi, and custom OpenAI-compatible models.
 - Live, observable activity feedback while the agent is working.
 - Persistent FIFO follow-up queues scoped to individual conversations.
 - A persistent five-theme interface built on shared semantic design tokens.
@@ -56,8 +56,8 @@ milestones and should not be mistaken for completed functionality.
 | UI runtime | React 19 | Stateful dashboard composition and streaming updates |
 | Styling | Tailwind CSS 4 + shadcn/ui primitives | Responsive layout and reusable controls |
 | Streaming AI | Vercel AI SDK 4 | Messages, streaming responses, multi-step tool calls |
-| Default model | Anthropic Claude | Native computer-use and Bash tool invocation |
-| BYOK models | Kimi and OpenAI-compatible providers | Provider-neutral computer and Bash tools |
+| Local project model | Anthropic Claude | Native computer-use and Bash tool invocation during local development |
+| BYOK models | Anthropic, Kimi, and OpenAI-compatible providers | Tab-scoped credentials and provider-appropriate tools |
 | Validation | Zod | API payload, persisted configuration, and tool input validation |
 | Desktop runtime | Vercel Sandbox | Ephemeral Linux compute and exposed noVNC port |
 | Desktop stack | Xvnc, openbox, noVNC, websockify | Virtual display, window management, and browser streaming |
@@ -83,8 +83,8 @@ flowchart LR
 
     Chat --> ChatRoute["POST /api/chat"]
     ChatRoute --> ModelRouter{"Model provider"}
-    ModelRouter --> Claude["Claude native tools"]
-    ModelRouter --> Compatible["Kimi or custom tools"]
+    ModelRouter --> Claude["Project or BYOK Claude native tools"]
+    ModelRouter --> Compatible["Kimi or OpenAI-compatible tools"]
     Claude --> Tools["Shared sandbox actions"]
     Compatible --> Tools
     Tools --> Sandbox["Vercel Sandbox"]
@@ -94,7 +94,8 @@ flowchart LR
 
 The browser owns presentation state, desktop-session metadata, and conversation
 history. The server owns model
-credentials from environment variables, validates BYOK requests, and executes
+local-development credentials from environment variables, enforces hosted
+BYOK, validates provider requests, and executes
 sandbox operations. The remote desktop is a separate runtime connected to the UI
 through a noVNC iframe.
 
@@ -201,8 +202,9 @@ on the left and Appearance on the right; smaller screens collapse to one
 scrollable column.
 
 `model-settings.tsx` owns the bottom-left Settings trigger and the unified
-dialog. It combines API Configuration and Theme sections. Project Claude and
-valid BYOK drafts are applied automatically after a short input debounce, while
+dialog. Local development can select Project Claude; hosted builds show one
+BYOK provider dropdown for Anthropic, Kimi, or OpenAI-compatible endpoints.
+Valid BYOK drafts are applied automatically after a short input debounce, while
 provider and theme choices require no save button. Invalid or incomplete BYOK
 drafts remain local to the dialog and do not replace the last valid model
 configuration. API fields are locked during an active agent run, but theme
@@ -390,11 +392,16 @@ It does not claim to expose hidden chain-of-thought.
 
 ## 9. Model Routing and BYOK
 
-The model configuration is a discriminated union with three variants:
+The model configuration is a discriminated union with four variants:
 
 ```ts
 type ClientModelConfig =
   | { provider: "anthropic" }
+  | {
+      provider: "anthropic-byok";
+      apiKey: string;
+      modelId: string;
+    }
   | {
       provider: "kimi";
       apiKey: string;
@@ -409,14 +416,22 @@ type ClientModelConfig =
     };
 ```
 
-### Claude path
+### Project Claude path
 
-- Uses server environment variables.
+- Uses server environment variables only during local development.
+- Is rejected by the API in production and other hosted builds even if a
+  shared key is present.
 - Uses Anthropic's native computer-use and Bash tool definitions.
 - Can use an Anthropic-compatible gateway through `ANTHROPIC_BASE_URL` and
   `ANTHROPIC_MODEL`.
 
-### Kimi Code path
+### Anthropic BYOK path
+
+- Uses the official Anthropic Messages API with the visitor's tab-scoped key.
+- Accepts a configurable Claude model ID.
+- Uses the same native computer-use and Bash tool definitions as Project Claude.
+
+### Kimi preset
 
 - Uses the Kimi Code OpenAI-compatible endpoint `https://api.kimi.com/coding/v1`.
 - Defaults to model ID `k3`, which remains editable in the UI.
@@ -638,7 +653,7 @@ enforce outbound network policy and DNS-level protections.
 | Debug panel | `debug-panel.tsx` | Event store timeline and action counts |
 | Remote desktop | `vnc-viewer.tsx` | noVNC connection and reconnect status |
 | Tool inspector | `tool-inspector.tsx` | Full screenshot, command output, action details, JSON copy |
-| Unified settings | `model-settings.tsx` | Auto-saving Project Claude, BYOK, and theme configuration |
+| Unified settings | `model-settings.tsx` | Local Project Claude, hosted BYOK dropdown, VNC diagnostics, data, tutorial, and themes |
 
 ## 15. API Surface
 
@@ -651,12 +666,13 @@ Request fields:
 | `messages` | AI SDK UI message history |
 | `sandboxId` | Active remote desktop identifier |
 | `desktopReady` | Literal readiness assertion from the connected dashboard viewer |
-| `modelConfig` | Discriminated Claude, Kimi, or custom configuration |
+| `modelConfig` | Discriminated project Claude, Anthropic BYOK, Kimi, or custom configuration |
 
 The route validates the body and rechecks Sandbox, Xvnc, and noVNC health before
 creating the model or allowing a tool call. An unavailable desktop returns HTTP
 409 and remains owned by the session queue. Invalid configuration returns HTTP
-400; unexpected model failures return HTTP 500 without destroying the desktop.
+400, while hosted Project Claude requests return HTTP 403. Unexpected model
+failures return HTTP 500 without destroying the desktop.
 
 ### `/api/kill-desktop`
 
@@ -754,7 +770,7 @@ regression, live Claude/Kimi tool-call flows, and Sandbox failure recovery.
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Server-side Claude credential |
+| `ANTHROPIC_API_KEY` | Local-development Project Claude credential; ignored for hosted model access |
 | `ANTHROPIC_BASE_URL` | Optional Anthropic-compatible Messages API prefix |
 | `ANTHROPIC_MODEL` | Optional Claude model override |
 | `SANDBOX_SNAPSHOT_ID` | Prebuilt desktop image used for new sandboxes |

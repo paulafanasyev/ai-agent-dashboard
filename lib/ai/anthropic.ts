@@ -4,6 +4,7 @@
  * Problem solved: Supports official or compatible Anthropic endpoints without leaking credentials to the client.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { DEFAULT_ANTHROPIC_MODEL_ID } from "@/lib/ai/model-config";
 
 const configuredBaseURL = process.env.ANTHROPIC_BASE_URL?.replace(/\/$/, "");
 
@@ -13,4 +14,8 @@ export const anthropicProvider = createAnthropic({
 });
 
 export const anthropicModelId =
-  process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
+  process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL_ID;
+
+export function createAnthropicByokModel(apiKey: string, modelId: string) {
+  return createAnthropic({ apiKey })(modelId);
+}

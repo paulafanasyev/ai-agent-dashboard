@@ -7,6 +7,9 @@ import type { ClientModelConfig } from "@/lib/ai/model-config";
 
 export function modelEndpointSignature(config: ClientModelConfig) {
   if (config.provider === "kimi") return `${config.provider}:${config.modelId}`;
+  if (config.provider === "anthropic-byok") {
+    return `${config.provider}:${config.modelId}`;
+  }
   if (config.provider === "custom") {
     return `${config.provider}:${config.baseUrl}:${config.modelId}`;
   }

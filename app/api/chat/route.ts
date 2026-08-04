@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   anthropicModelId,
   anthropicProvider,
+  createAnthropicByokModel,
 } from "@/lib/ai/anthropic";
 import {
   createKimiModel,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/ai/kimi";
 import { shouldStartWithVisibleComputer } from "@/lib/ai/browser-routing";
 import { isSafeCustomBaseUrl } from "@/lib/ai/model-config";
+import { getServerModelCapabilities } from "@/lib/ai/runtime-policy";
 import { checkDesktopHealth } from "@/lib/sandbox/utils";
 import { bashTool, computerTool } from "@/lib/sandbox/tool";
 import {
@@ -28,6 +30,11 @@ export const maxDuration = 300;
 
 const modelConfigSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("anthropic") }),
+  z.object({
+    provider: z.literal("anthropic-byok"),
+    apiKey: z.string().trim().min(8).max(512),
+    modelId: z.string().trim().min(1).max(200),
+  }),
   z.object({
     provider: z.literal("kimi"),
     apiKey: z.string().trim().min(8).max(512),
@@ -56,6 +63,20 @@ export async function POST(req: Request) {
     const request = chatRequestSchema.parse(await req.json());
     sandboxId = request.sandboxId;
     const { messages, modelConfig } = request;
+    if (
+      modelConfig.provider === "anthropic" &&
+      !getServerModelCapabilities().projectClaudeAvailable
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: "Project Claude is local-development only. Configure BYOK in Settings.",
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
     if (!(await checkDesktopHealth(sandboxId))) {
       return new Response(
         JSON.stringify({ error: "Desktop is not ready. The task remains queued." }),
@@ -65,12 +86,16 @@ export async function POST(req: Request) {
         },
       );
     }
-    const usesGenericTools = modelConfig.provider !== "anthropic";
+    const usesGenericTools =
+      modelConfig.provider !== "anthropic" &&
+      modelConfig.provider !== "anthropic-byok";
     const mustStartWithComputer = shouldStartWithVisibleComputer(messages);
 
     const model =
       modelConfig.provider === "kimi"
         ? createKimiModel(modelConfig.apiKey, modelConfig.modelId)
+        : modelConfig.provider === "anthropic-byok"
+          ? createAnthropicByokModel(modelConfig.apiKey, modelConfig.modelId)
         : modelConfig.provider === "custom"
           ? createOpenAICompatibleModel({
               apiKey: modelConfig.apiKey,
@@ -107,7 +132,8 @@ export async function POST(req: Request) {
         : "auto",
       providerOptions: modelConfig.provider === "kimi"
         ? { openai: { reasoningEffort: modelConfig.reasoningEffort } }
-        : modelConfig.provider === "anthropic"
+        : modelConfig.provider === "anthropic" ||
+            modelConfig.provider === "anthropic-byok"
           ? { anthropic: { cacheControl: { type: "ephemeral" } } }
           : undefined,
     });

@@ -45,6 +45,7 @@ interface DashboardShellProps {
   activityEvent: ToolEvent | null;
   agentStatus: AgentStatus;
   modelConfig: ClientModelConfig;
+  modelConfigured: boolean;
   vncDisplayMode: VncDisplayMode;
   settingsControl: ReactNode;
   dialogs: ReactNode;
@@ -167,6 +168,7 @@ export function DashboardShell(props: DashboardShellProps) {
       runtimeEvents={session.runtimeEvents}
       initialQueuedPrompts={conversation.queuedPrompts}
       modelConfig={props.modelConfig}
+      modelConfigured={props.modelConfigured}
       connectionReady={session.connectionStatus === "ready"}
       connectionStatus={session.connectionStatus}
       selectedEventId={props.selectedEventId}

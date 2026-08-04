@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { Monitor, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
+import { Monitor, MoreVertical, Pencil, Pin, Trash2 } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -133,7 +133,7 @@ export function DesktopSessionItem({
       <div
         ref={rowRef}
         className={cn(
-          "relative flex h-11 items-center gap-1 rounded-lg px-1 transition-colors",
+          "group/session relative flex h-11 items-center gap-1 rounded-lg px-1 transition-colors",
           session.pinned
             ? "bg-violet-50/85"
             : "hover:bg-zinc-100/70",
@@ -208,11 +208,12 @@ export function DesktopSessionItem({
           aria-haspopup="menu"
           aria-expanded={Boolean(menuPosition)}
           className={cn(
-            "mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-35",
-            menuPosition && "bg-zinc-200 text-zinc-800",
+            "absolute right-0.5 top-1/2 flex size-6 origin-left -translate-x-1.5 -translate-y-1/2 scale-75 items-center justify-center rounded-md text-zinc-400 opacity-0 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-zinc-200 hover:text-zinc-800 focus-visible:translate-x-0 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-0 group-hover/session:translate-x-0 group-hover/session:scale-100 group-hover/session:opacity-100 group-focus-within/session:translate-x-0 group-focus-within/session:scale-100 group-focus-within/session:opacity-100",
+            menuPosition &&
+              "translate-x-0 scale-100 bg-zinc-200 text-zinc-800 opacity-100",
           )}
         >
-          <MoreHorizontal className="size-4" />
+          <MoreVertical className="size-3.5" />
         </button>
       </div>
 
