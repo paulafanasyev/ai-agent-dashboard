@@ -15,42 +15,11 @@
  */
 
 import { Sandbox } from "@vercel/sandbox";
-
-const STARTUP_SCRIPT = `#!/bin/bash
-set -e
-
-# Read resolution from env or default
-RESOLUTION=\${RESOLUTION:-1024x768}
-
-# Use Xvnc (TigerVNC) as combined X server + VNC server
-Xvnc :99 -geometry $RESOLUTION -depth 24 -SecurityTypes None -AlwaysShared -rfbport 5900 &
-sleep 1
-
-export DISPLAY=:99
-
-# Set a desktop background color
-# NOTE: ctypes.util is not available on AL2023, so load libX11.so.6 directly
-python3 -c "
-import ctypes
-lib = ctypes.cdll.LoadLibrary('libX11.so.6')
-d = lib.XOpenDisplay(None)
-s = lib.XDefaultScreen(d)
-r = lib.XRootWindow(d, s)
-lib.XSetWindowBackground(d, r, 0x2D2D2D)
-lib.XClearWindow(d, r)
-lib.XFlush(d)
-lib.XCloseDisplay(d)
-" 2>/dev/null || true
-
-# Start window manager (required for Chrome and proper window rendering)
-openbox &
-sleep 0.5
-
-# Start noVNC websockify proxy (port 6080 -> VNC port 5900)
-websockify --web /usr/share/novnc 6080 localhost:5900 &
-
-echo "Desktop environment started"
-`;
+import {
+  DESKTOP_STARTUP_SCRIPT,
+  NOVNC_VERSION,
+  WEBSOCKIFY_VERSION,
+} from "@/lib/sandbox/snapshot-runtime";
 
 async function run(
   sandbox: Sandbox,
@@ -161,13 +130,13 @@ async function createSnapshot() {
     sandbox,
     "Installing websockify...",
     "pip3",
-    ["install", "websockify"],
+    ["install", `websockify==${WEBSOCKIFY_VERSION}`],
   );
 
   // Step 6: Install noVNC
   await run(sandbox, "Installing noVNC...", "bash", [
     "-c",
-    "git clone https://github.com/novnc/noVNC.git /usr/share/novnc && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html",
+    `git clone --depth 1 --branch ${NOVNC_VERSION} https://github.com/novnc/noVNC.git /usr/share/novnc && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html`,
   ]);
 
   // Step 7: Write startup script (write to sandbox dir first, then sudo mv)
@@ -175,7 +144,7 @@ async function createSnapshot() {
   await sandbox.writeFiles([
     {
       path: "start-desktop.sh",
-      content: Buffer.from(STARTUP_SCRIPT),
+      content: Buffer.from(DESKTOP_STARTUP_SCRIPT),
     },
   ]);
   await run(sandbox, "  Moving startup script...", "bash", [

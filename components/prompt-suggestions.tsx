@@ -7,6 +7,10 @@ import { Button } from "./ui/button";
 
 const suggestions = [
   {
+    text: "What's the weather in Dubai?",
+    prompt: "What's the weather in Dubai?",
+  },
+  {
     text: "Create notes.txt",
     prompt: "Open a text editor and create a new file called notes.txt and write 'we are so back!'",
   },

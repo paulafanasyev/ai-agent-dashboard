@@ -257,13 +257,14 @@ stateDiagram-v2
     Checking --> Ready: noVNC viewer connected
     Checking --> Reconnecting: Viewer retrying
     Reconnecting --> Ready: Viewer reconnected
-    Reconnecting --> Offline: Runtime health failed
+    Reconnecting --> Reconnecting: Retry with capped backoff
+    Reconnecting --> Offline: Session becomes inactive
     Creating --> Error: Sandbox startup failed
     Error --> Creating: Reconnect
     Ready --> Checking: Switch or health verification
     Ready --> Reconnecting: Viewer connection lost
     Ready --> Ready: Create or switch conversation
-    Ready --> [*]: Delete desktop or unload
+    Ready --> [*]: Delete desktop
 ```
 
 ### Creation
@@ -335,11 +336,12 @@ conversation. If the sandbox ID still points to a running runtime, the server
 reconnects to it. Otherwise, a replacement sandbox is created and the generation
 counter changes so the iframe can be intentionally remounted.
 
-### Deletion and unload
+### Deletion and page exit
 
 Deleting a desktop session calls `/api/kill-desktop` before removing its
-conversations and local state. The
-page also sends cleanup beacons for known sandboxes during `pagehide`.
+conversations and local state. A normal page exit persists browser state but does
+not stop the remote runtime, allowing refresh and brief navigation to reconnect
+to the same desktop. The Sandbox timeout remains the final cleanup boundary.
 
 ### Concurrency policy
 
@@ -512,20 +514,29 @@ visual session context. Bash is reserved for non-visual work and is labeled as a
 
 1. Reconnect to a supplied running sandbox ID when possible.
 2. Otherwise create a sandbox from `SANDBOX_SNAPSHOT_ID`.
-3. Install a small noVNC status bridge and start the desktop environment script.
+3. Install a small noVNC status bridge, refresh the supervised startup script,
+   and start the desktop environment.
 4. Verify both the Xvnc backend on port `5900` and noVNC HTTP service on port `6080`.
-5. Set the X11 background and launch Chrome.
-6. Return an autoconnecting noVNC URL and wait for the viewer handshake.
-7. Recheck known runtimes every ten seconds and whenever the page becomes visible or focused.
+5. Complete a public WebSocket connection and validate the Xvnc RFB banner.
+6. Return an autoconnecting noVNC URL and wait for the browser viewer handshake.
+7. Recheck known runtimes every 15 seconds and whenever the page becomes visible or focused.
 
 Runtime availability and viewer connectivity are deliberately separate. The UI
 displays `checking`, `reconnecting`, or `offline` until all required checks pass.
 Connection status is excluded from `localStorage`, so a previously ready desktop
 cannot reappear as ready after reload without a new health check and viewer
-handshake.
+handshake. Each desktop has one connection controller: checks and reconnects are
+serialized, a disconnected iframe remains mounted for an eight-second grace
+period so noVNC can recover in place, and failed handshakes retry at 1, 2, 4, 8,
+then 15-second intervals. Background sessions do not consume reconnect attempts.
 
 The snapshot created by `lib/sandbox/create-snapshot.ts` preinstalls the desktop
 stack so individual sessions do not repeat expensive package installation.
+The application refreshes the startup script whenever it allocates a new
+Sandbox, so existing snapshots gain supervised Xvnc, openbox, websockify, and
+Chrome processes without waiting for a snapshot rebuild. New snapshots pin
+noVNC and websockify releases for reproducibility. Runtime sandboxes request a
+30-minute timeout; explicit desktop deletion still stops them immediately.
 
 ### Render isolation
 
@@ -674,9 +685,9 @@ failures return HTTP 500 without destroying the desktop.
 
 ### `/api/kill-desktop`
 
-Accepts a sandbox ID and stops the corresponding runtime. Both GET and POST are
-supported because page-unload cleanup and explicit session deletion have
-different browser constraints.
+Accepts a sandbox ID by POST and stops the corresponding runtime. A GET handler
+is deliberately not exposed: destructive cleanup requires an explicit request
+from desktop deletion or the confirmed clear-all flow.
 
 ## 16. Error Handling and Robustness
 
