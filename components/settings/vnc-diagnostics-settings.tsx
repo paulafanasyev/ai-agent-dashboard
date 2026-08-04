@@ -99,11 +99,14 @@ export function VncDiagnosticsSettings({
     try {
       const nextReport = await onRunDiagnostics();
       setReport(nextReport);
-      if (nextReport.overall === "healthy") {
+      if (nextReport.overall === "healthy" && client.viewerReady) {
         toast.success("VNC diagnostics passed");
       } else {
         toast.info("VNC diagnostics completed", {
-          description: nextReport.message,
+          description:
+            nextReport.overall === "healthy" && !client.viewerReady
+              ? "The server-side RFB handshake passed, but this browser viewer is not connected yet."
+              : nextReport.message,
         });
       }
     } catch {
@@ -125,8 +128,9 @@ export function VncDiagnosticsSettings({
     }
   };
 
+  const endToEndHealthy = report?.overall === "healthy" && client.viewerReady;
   const overallTone =
-    report?.overall === "healthy"
+    endToEndHealthy
       ? "border-emerald-500/25 bg-emerald-500/[0.05] text-emerald-400"
       : report?.overall === "degraded"
         ? "border-red-500/25 bg-red-500/[0.05] text-red-400"
@@ -179,7 +183,7 @@ export function VncDiagnosticsSettings({
 
       <div className={cn("mt-4 rounded-xl border p-4", overallTone)}>
         <div className="flex items-start gap-3">
-          {report?.overall === "healthy" ? (
+          {endToEndHealthy ? (
             <ShieldCheck className="mt-0.5 size-4 shrink-0" />
           ) : (
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
@@ -187,8 +191,10 @@ export function VncDiagnosticsSettings({
           <div>
             <p className="text-[11px] font-semibold">
               {report
-                ? report.overall === "healthy"
+                ? endToEndHealthy
                   ? "VNC chain is healthy"
+                  : report.overall === "healthy"
+                    ? "Server is healthy; viewer is pending"
                   : report.overall === "not_ready"
                     ? "Desktop is not allocated"
                     : "VNC chain needs attention"
@@ -196,7 +202,7 @@ export function VncDiagnosticsSettings({
             </p>
             <p className="mt-1 text-[10px] leading-4 opacity-80">
               {report?.message ??
-                "Checks Vercel authentication, the snapshot, Sandbox status, ports 5900 and 6080, and the external stream route."}
+                "Checks Vercel authentication, the snapshot, ports 5900 and 6080, and an external WebSocket/RFB handshake."}
             </p>
           </div>
         </div>
@@ -212,7 +218,10 @@ export function VncDiagnosticsSettings({
           <DiagnosticRow label="Sandbox control plane" check={report.sandbox.controlPlane} />
           <DiagnosticRow label="VNC · 5900" check={report.services.vnc} />
           <DiagnosticRow label="noVNC · 6080" check={report.services.noVnc} />
-          <DiagnosticRow label="External stream" check={report.services.streamRoute} />
+          <DiagnosticRow
+            label="External WebSocket · RFB"
+            check={report.services.streamRoute}
+          />
         </div>
       ) : null}
 

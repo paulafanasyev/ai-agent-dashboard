@@ -195,4 +195,14 @@ test("hosted settings require BYOK through one provider dropdown", async ({
   await expect
     .poll(() => page.evaluate(() => JSON.stringify(localStorage)))
     .not.toContain("sk-ant-e2e-browser-only");
+
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const weatherPreset = page.getByRole("button", {
+    name: "Use preset: What's the weather in Dubai?",
+  });
+  await expect(weatherPreset).toBeEnabled();
+  await weatherPreset.click();
+  await expect(page.locator("form input")).toHaveValue(
+    "What's the weather in Dubai?",
+  );
 });

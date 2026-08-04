@@ -38,8 +38,9 @@ are implemented on `main`.
 - Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
 - Named desktop creation plus persistent pinning, renaming, drag ordering, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
 - Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
-- Server-backed VNC Diagnostics in Settings checks deployment authentication, snapshot presence, Sandbox reachability, ports 5900/6080, and the external stream route without exposing credential values.
-- Transient Vercel Sandbox lookup failures are retried, while unrecoverable startup errors remain synchronized across the desktop viewer and activity feedback.
+- Server-backed VNC Diagnostics in Settings checks deployment authentication, snapshot presence, Sandbox reachability, ports 5900/6080, and a real external WebSocket/RFB handshake without exposing credential values.
+- A per-desktop connection controller serializes health checks and reconnects, preserves the iframe through brief disconnects, and retries with capped exponential backoff.
+- Desktop sandboxes run for up to 30 minutes, while a startup script refreshed on allocation supervises Xvnc, openbox, websockify, and Chrome; pinned noVNC/websockify releases make rebuilt snapshots reproducible.
 - Persistent per-conversation FIFO task queues: prompts entered before Desktop readiness or during an active run execute automatically when safe.
 - Frame-coalesced scrolling and dragging, throttled live-state projection, idle-time persistence, lazy screenshot decoding, and a memoized VNC viewer isolated from token-by-token chat rendering.
 - Four persistent, neutral-dark interface themes with researched Vercel, Vue, Xcode, and GitHub accent and text palettes, plus live preview in Settings.
@@ -126,7 +127,7 @@ Alternatively, set `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` man
 
 ### 3. Create a sandbox snapshot
 
-The snapshot pre-installs the desktop environment (Xvnc, Chrome, openbox, noVNC, xdotool, ImageMagick) so sandboxes boot in seconds.
+The snapshot pre-installs the desktop environment (Xvnc, Chrome, openbox, noVNC, xdotool, ImageMagick) so sandboxes boot in seconds. Its startup script supervises each long-running desktop process, and the noVNC/websockify versions are pinned for reproducible streams.
 
 ```bash
 npx tsx lib/sandbox/create-snapshot.ts

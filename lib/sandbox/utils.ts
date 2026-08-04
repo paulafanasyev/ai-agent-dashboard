@@ -10,12 +10,16 @@ import type {
   DiagnosticCheckStatus,
   VncServerDiagnostics,
 } from "@/lib/sandbox/diagnostics";
+import { probeExternalRfb } from "@/lib/sandbox/rfb-probe";
+import { DESKTOP_STARTUP_SCRIPT } from "@/lib/sandbox/snapshot-runtime";
 import { resolution } from "./config";
 
 const NOVNC_PORT = 6080;
 const VNC_PORT = 5900;
 const DISPLAY_ENV = { DISPLAY: ":99" };
+const SANDBOX_TIMEOUT_MS = 30 * 60 * 1_000;
 const SANDBOX_LOOKUP_RETRY_DELAYS = [0, 450, 1200] as const;
+const EXTERNAL_RFB_RETRY_DELAYS = [0, 750, 1_500, 3_000] as const;
 const NOVNC_STATUS_BRIDGE = `(() => {
   const source = "agent-dashboard-vnc";
   const report = () => {
@@ -77,6 +81,26 @@ if marker not in html:
   }
 }
 
+async function installDesktopStartupScript(sandbox: Sandbox) {
+  await sandbox.writeFiles([
+    {
+      path: "start-desktop.sh",
+      content: Buffer.from(DESKTOP_STARTUP_SCRIPT),
+    },
+  ]);
+  const result = await sandbox.runCommand({
+    cmd: "bash",
+    args: [
+      "-c",
+      "mv /vercel/sandbox/start-desktop.sh /usr/local/bin/start-desktop.sh && chmod +x /usr/local/bin/start-desktop.sh",
+    ],
+    sudo: true,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error("Failed to install the supervised desktop startup script");
+  }
+}
+
 export const getDesktop = async (id?: string) => {
   try {
     if (id) {
@@ -97,11 +121,12 @@ export const getDesktop = async (id?: string) => {
         type: "snapshot",
         snapshotId: process.env.SANDBOX_SNAPSHOT_ID!,
       },
-      timeout: 300000,
+      timeout: SANDBOX_TIMEOUT_MS,
       ports: [NOVNC_PORT],
     });
 
     await installNoVNCStatusBridge(sandbox);
+    await installDesktopStartupScript(sandbox);
 
     // Start the desktop environment
     await sandbox.runCommand({
@@ -132,17 +157,6 @@ lib.XFlush(d)
 lib.XCloseDisplay(d)`,
       ],
       env: DISPLAY_ENV,
-    });
-
-    // Launch Chrome so the AI has a browser to work with immediately
-    await sandbox.runCommand({
-      cmd: "bash",
-      args: [
-        "-c",
-        "google-chrome --no-sandbox --disable-gpu --no-first-run --disable-dev-shm-usage --start-maximized 'about:blank' &",
-      ],
-      env: DISPLAY_ENV,
-      detached: true,
     });
 
     return sandbox;
@@ -179,6 +193,19 @@ with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as resp
   } catch {
     return false;
   }
+}
+
+async function waitForExternalRfb(baseUrl: string) {
+  let lastDetail = "The external WebSocket route is not ready.";
+  for (const delayMs of EXTERNAL_RFB_RETRY_DELAYS) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    const probe = await probeExternalRfb(baseUrl);
+    if (probe.healthy) return probe;
+    lastDetail = probe.detail;
+  }
+  throw new Error(lastDetail);
 }
 
 function diagnosticCheck(
@@ -325,7 +352,8 @@ print(json.dumps(result))`;
         ? parseServiceProbe((await result.stdout()).trim())
         : null;
     const streamUrl = sandbox.domain(NOVNC_PORT);
-    const streamRouteAvailable = streamUrl.startsWith("https://");
+    const externalRfb = await probeExternalRfb(streamUrl);
+    const streamRouteAvailable = externalRfb.healthy;
     const vncHealthy = probe?.vnc === true;
     const noVncHealthy = probe?.noVnc === true;
     const healthy =
@@ -362,9 +390,7 @@ print(json.dumps(result))`;
         ),
         streamRoute: diagnosticCheck(
           streamRouteAvailable ? "pass" : "fail",
-          streamRouteAvailable
-            ? "Vercel generated an HTTPS stream route."
-            : "No HTTPS stream route was generated.",
+          externalRfb.detail,
         ),
       },
       message: healthy
@@ -397,10 +423,13 @@ print(json.dumps(result))`;
 export const checkDesktopHealth = async (id: string) => {
   try {
     const sandbox = await getSandboxWithRetry(id);
-    return (
-      sandbox.status === "running" &&
-      (await areDesktopServicesHealthy(sandbox))
-    );
+    if (
+      sandbox.status !== "running" ||
+      !(await areDesktopServicesHealthy(sandbox))
+    ) {
+      return false;
+    }
+    return (await probeExternalRfb(sandbox.domain(NOVNC_PORT))).healthy;
   } catch {
     return false;
   }
@@ -422,6 +451,7 @@ export const getDesktopURL = async (id?: string) => {
   try {
     const sandbox = await getDesktop(id);
     const baseUrl = sandbox.domain(NOVNC_PORT);
+    await waitForExternalRfb(baseUrl);
     const streamUrl = `${baseUrl}/vnc.html?autoconnect=true&resize=scale&reconnect=true`;
 
     return { streamUrl, id: sandbox.sandboxId };

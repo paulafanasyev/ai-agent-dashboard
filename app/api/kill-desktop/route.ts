@@ -1,14 +1,11 @@
 /**
  * File: app/api/kill-desktop/route.ts
  * Purpose: Stop a remote desktop sandbox through an HTTP endpoint.
- * Problem solved: Releases session compute safely during deletion, unload, or cleanup.
+ * Problem solved: Releases session compute safely after an explicit destructive action.
  */
 import { killDesktop } from "@/lib/sandbox/utils";
 
-// Common handler for both GET and POST requests
 async function handleKillDesktop(request: Request) {
-  // Enable CORS to ensure this works across all browsers
-
   const { searchParams } = new URL(request.url);
   const sandboxId = searchParams.get("sandboxId");
 
@@ -27,7 +24,6 @@ async function handleKillDesktop(request: Request) {
   }
 }
 
-// Handle POST requests
 export async function POST(request: Request) {
   return handleKillDesktop(request);
 }
