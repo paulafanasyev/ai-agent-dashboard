@@ -20,6 +20,7 @@ describe("desktop snapshot runtime", () => {
 
   it("keeps the VNC stack and browser under restart supervision", () => {
     expect(DESKTOP_STARTUP_SCRIPT).toContain("supervise_xvnc &");
+    expect(DESKTOP_STARTUP_SCRIPT).toContain("-UseBlacklist=0");
     expect(DESKTOP_STARTUP_SCRIPT).toContain("supervise websockify");
     expect(DESKTOP_STARTUP_SCRIPT).toContain("supervise chrome");
     expect(DESKTOP_STARTUP_SCRIPT).toContain("supervise openbox");

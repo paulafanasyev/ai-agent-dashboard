@@ -85,7 +85,13 @@ export function useDesktopHealth({
       }
 
       try {
-        const isHealthy = await checkDesktopHealth(sandboxId);
+        const viewerIsConfirmed =
+          activeSessionIdRef.current !== sessionId ||
+          viewerReadyRef.current.has(sessionId);
+        const isHealthy = await checkDesktopHealth(
+          sandboxId,
+          !viewerIsConfirmed,
+        );
         upsertRuntimeEvent(
           sessionId,
           finishRuntimeEvent(runtimeEvent, isHealthy ? "completed" : "error", {
@@ -94,9 +100,6 @@ export function useDesktopHealth({
               : "The desktop runtime did not pass its health checks.",
           }),
         );
-        const viewerIsConfirmed =
-          activeSessionIdRef.current !== sessionId ||
-          viewerReadyRef.current.has(sessionId);
         setSessions((previous) =>
           previous.map((item) =>
             item.id === sessionId && item.sandboxId === sandboxId

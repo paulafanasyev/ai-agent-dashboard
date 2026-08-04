@@ -20,6 +20,19 @@ const DISPLAY_ENV = { DISPLAY: ":99" };
 const SANDBOX_TIMEOUT_MS = 30 * 60 * 1_000;
 const SANDBOX_LOOKUP_RETRY_DELAYS = [0, 450, 1200] as const;
 const EXTERNAL_RFB_RETRY_DELAYS = [0, 750, 1_500, 3_000] as const;
+const PYTHON_LISTENING_PORT_PROBE = `def port_is_listening(port):
+    expected = format(port, "04X")
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(table, "r", encoding="ascii") as rows:
+                next(rows, None)
+                for row in rows:
+                    columns = row.split()
+                    if len(columns) >= 4 and columns[1].endswith(":" + expected) and columns[3] == "0A":
+                        return True
+        except FileNotFoundError:
+            pass
+    return False`;
 const NOVNC_STATUS_BRIDGE = `(() => {
   const source = "agent-dashboard-vnc";
   const report = () => {
@@ -182,18 +195,19 @@ async function waitForNoVNC(sandbox: Sandbox, maxRetries = 20) {
   throw new Error("noVNC health check timed out");
 }
 
-/** Probes Xvnc port 5900 and noVNC HTTP port 6080 from inside the runtime. */
+/** Checks the Xvnc listener without opening an unauthenticated RFB connection, then probes HTTP. */
 async function areDesktopServicesHealthy(sandbox: Sandbox) {
   try {
     const result = await sandbox.runCommand({
       cmd: "python3",
       args: [
         "-c",
-        `import socket
-import urllib.request
+        `import urllib.request
 
-connection = socket.create_connection(("127.0.0.1", ${VNC_PORT}), timeout=2)
-connection.close()
+${PYTHON_LISTENING_PORT_PROBE}
+
+if not port_is_listening(${VNC_PORT}):
+    raise RuntimeError("VNC listener is unavailable")
 with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as response:
     print(response.status)`,
       ],
@@ -336,16 +350,11 @@ export const diagnoseDesktop = async (
     }
 
     const probeScript = `import json
-import socket
 import urllib.request
 
-result = {"vnc": False, "noVnc": False}
-try:
-    connection = socket.create_connection(("127.0.0.1", ${VNC_PORT}), timeout=2)
-    connection.close()
-    result["vnc"] = True
-except Exception:
-    pass
+${PYTHON_LISTENING_PORT_PROBE}
+
+result = {"vnc": port_is_listening(${VNC_PORT}), "noVnc": False}
 
 try:
     with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as response:
@@ -431,8 +440,14 @@ print(json.dumps(result))`;
   }
 };
 
-/** Requires a running Sandbox, healthy local services, and a working external RFB handshake. */
-export const checkDesktopHealth = async (id: string) => {
+/**
+ * Requires a running Sandbox and healthy local services. The external RFB handshake can be
+ * skipped when the browser viewer is already confirmed, avoiding an unnecessary second client.
+ */
+export const checkDesktopHealth = async (
+  id: string,
+  probeExternal = true,
+) => {
   try {
     const sandbox = await getSandboxWithRetry(id);
     if (
@@ -441,6 +456,7 @@ export const checkDesktopHealth = async (id: string) => {
     ) {
       return false;
     }
+    if (!probeExternal) return true;
     return (await probeExternalRfb(sandbox.domain(NOVNC_PORT))).healthy;
   } catch {
     return false;
@@ -463,9 +479,24 @@ export const getReadyDesktop = async (id: string | undefined) => {
 /** Allocates or reconnects a Desktop and returns only its browser-safe ID and noVNC URL. */
 export const getDesktopURL = async (id?: string) => {
   try {
-    const sandbox = await getDesktop(id);
-    const baseUrl = sandbox.domain(NOVNC_PORT);
-    await waitForExternalRfb(baseUrl);
+    let sandbox = await getDesktop(id);
+    let baseUrl = sandbox.domain(NOVNC_PORT);
+    try {
+      await waitForExternalRfb(baseUrl);
+    } catch (error) {
+      // Older running Desktops may already have blacklisted websockify's loopback address.
+      // Replace that one stale runtime once; new runtimes disable the ineffective shared-proxy
+      // blacklist and use a probe that completes authentication cleanly.
+      if (!id || sandbox.sandboxId !== id) throw error;
+      try {
+        await sandbox.stop();
+      } catch {
+        // A runtime that disappeared between lookup and cleanup is already safe to replace.
+      }
+      sandbox = await getDesktop();
+      baseUrl = sandbox.domain(NOVNC_PORT);
+      await waitForExternalRfb(baseUrl);
+    }
     const streamUrl = `${baseUrl}/vnc.html?autoconnect=true&resize=scale&reconnect=true`;
 
     return { streamUrl, id: sandbox.sandboxId };

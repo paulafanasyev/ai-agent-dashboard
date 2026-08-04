@@ -40,6 +40,41 @@ async function rfbServer(firstMessage?: string | string[]) {
   return `http://127.0.0.1:${address.port}`;
 }
 
+async function completeRfbServer(bannerParts: string[] = ["RFB 003.008\n"]) {
+  const server = new WebSocketServer({ port: 0, path: "/websockify" });
+  const clientMessages: Buffer[] = [];
+  servers.push(server);
+  await once(server, "listening");
+  server.on("connection", (socket) => {
+    for (const part of bannerParts) socket.send(part);
+    let phase: "version" | "client-init" = "version";
+    socket.on("message", (data) => {
+      const message = Buffer.from(data as ArrayBuffer);
+      clientMessages.push(message);
+      if (phase === "version") {
+        const securityNone = Buffer.alloc(4);
+        securityNone.writeUInt32BE(1);
+        socket.send(securityNone);
+        phase = "client-init";
+        return;
+      }
+
+      const desktopName = Buffer.from("Agent Desktop", "utf8");
+      const serverInit = Buffer.alloc(24 + desktopName.length);
+      serverInit.writeUInt16BE(1024, 0);
+      serverInit.writeUInt16BE(768, 2);
+      serverInit.writeUInt32BE(desktopName.length, 20);
+      desktopName.copy(serverInit, 24);
+      socket.send(serverInit);
+    });
+  });
+  const address = server.address() as AddressInfo;
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    clientMessages,
+  };
+}
+
 describe("external RFB probe", () => {
   it("maps the public noVNC route to its WebSocket endpoint", () => {
     expect(externalRfbWebSocketUrl("https://desktop.example.test/vnc.html")).toBe(
@@ -56,12 +91,27 @@ describe("external RFB probe", () => {
     expect(isRfbProtocolBanner("HTTP/1.1 200 OK\n")).toBe(false);
   });
 
-  it("passes after a real WebSocket and RFB handshake", async () => {
-    const baseUrl = await rfbServer(["RFB 003.", "008\n"]);
+  it("passes only after version, None security, and initialization complete", async () => {
+    const { baseUrl, clientMessages } = await completeRfbServer([
+      "RFB 003.",
+      "008\n",
+    ]);
 
     await expect(probeExternalRfb(baseUrl, 500)).resolves.toEqual({
       healthy: true,
       detail: "The external WebSocket completed an RFB handshake.",
+    });
+    expect(clientMessages).toEqual([
+      Buffer.from("RFB 003.003\n", "ascii"),
+      Buffer.from([1]),
+    ]);
+  });
+
+  it("does not treat a banner-only connection as healthy", async () => {
+    const bannerOnlyUrl = await rfbServer("RFB 003.008\n");
+    await expect(probeExternalRfb(bannerOnlyUrl, 20)).resolves.toMatchObject({
+      healthy: false,
+      detail: "The external WebSocket did not complete the RFB handshake in time.",
     });
   });
 

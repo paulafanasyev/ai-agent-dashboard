@@ -226,6 +226,41 @@
   }
 }
 
+/*
+ * The Chat and VNC panels keep one React/DOM identity across the responsive breakpoint.
+ * Mobile only changes flex direction and visual order, so the live noVNC iframe is never moved
+ * between separate component trees when the window crosses 768px.
+ */
+@media (max-width: 767px) {
+  .dashboard-responsive-panels {
+    flex-direction: column !important;
+  }
+
+  .dashboard-chat-panel {
+    order: 3;
+    flex-grow: 54 !important;
+  }
+
+  .dashboard-viewer-panel {
+    order: 1;
+    flex-grow: 46 !important;
+  }
+
+  .dashboard-resize-handle {
+    order: 2;
+    display: none;
+  }
+
+  .dashboard-chat-panel-expanded {
+    flex: 1 1 0 !important;
+  }
+
+  .dashboard-viewer-panel-compact {
+    flex: 0 0 40px !important;
+    overflow: visible !important;
+  }
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 /* ::-webkit-scrollbar {
   display: none;

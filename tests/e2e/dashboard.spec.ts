@@ -73,6 +73,44 @@ test("buttons do not show automatic tooltips", async ({ page }) => {
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
+test("keeps the VNC viewer mounted across the responsive breakpoint", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.goto("/");
+
+  const viewer = page.locator('[data-tutorial="desktop-viewer"]');
+  await expect(viewer).toBeVisible();
+  await viewer.evaluate((element) =>
+    element.setAttribute("data-resize-sentinel", "same-node"),
+  );
+
+  await page.setViewportSize({ width: 700, height: 900 });
+  await expect(
+    page.getByRole("button", { name: /Switch desktop\. Current desktop:/ }),
+  ).toBeVisible();
+  await expect(viewer).toHaveAttribute("data-resize-sentinel", "same-node");
+  const chat = page.locator('[data-tutorial="chat-workspace"]');
+  await expect
+    .poll(async () => {
+      const [viewerBox, chatBox] = await Promise.all([
+        viewer.boundingBox(),
+        chat.boundingBox(),
+      ]);
+      return Boolean(
+        viewerBox &&
+          chatBox &&
+          viewerBox.y + viewerBox.height <= chatBox.y + 1,
+      );
+    })
+    .toBe(true);
+
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await expect(page.getByRole("button", { name: "New desktop" })).toBeVisible();
+  await expect(viewer).toHaveAttribute("data-resize-sentinel", "same-node");
+});
+
 test("unconfigured composer links to API settings through a notification", async ({
   page,
 }) => {
