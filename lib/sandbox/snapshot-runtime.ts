@@ -31,7 +31,7 @@ supervise_xvnc() {
   while true; do
     rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
     echo "[$(date -Iseconds)] starting Xvnc" >> "$LOG_DIR/supervisor.log"
-    Xvnc :99 -geometry "$RESOLUTION" -depth 24 -SecurityTypes None -AlwaysShared -rfbport 5900 >> "$LOG_DIR/xvnc.log" 2>&1
+    Xvnc :99 -geometry "$RESOLUTION" -depth 24 -SecurityTypes None -AlwaysShared -UseBlacklist=0 -rfbport 5900 >> "$LOG_DIR/xvnc.log" 2>&1
     local exit_code=$?
     echo "[$(date -Iseconds)] Xvnc exited with $exit_code; restarting" >> "$LOG_DIR/supervisor.log"
     sleep 1

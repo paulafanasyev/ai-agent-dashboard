@@ -186,6 +186,7 @@ export function DashboardShell(props: DashboardShellProps) {
   );
   const viewer = (
     <VncViewer
+      key={`vnc-viewer-${session.id}`}
       sessionId={session.id}
       sessionTitle={session.title}
       streamUrl={props.streamUrls[session.id] ?? null}
@@ -205,61 +206,69 @@ export function DashboardShell(props: DashboardShellProps) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-surface text-zinc-900">
       {header}
-      {props.isDesktop ? (
-        <main className="min-h-0 flex-1">
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={47} minSize={34} maxSize={66}>
-              <div className="flex h-full min-w-0">
+      <main className="min-h-0 flex-1">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="dashboard-responsive-panels h-full"
+        >
+          <ResizablePanel
+            id="dashboard-chat-panel"
+            defaultSize={47}
+            minSize={34}
+            maxSize={66}
+            className={cn(
+              "dashboard-chat-panel",
+              props.vncDisplayMode !== "embedded" &&
+                "dashboard-chat-panel-expanded",
+            )}
+          >
+            <div className="flex h-full min-w-0 bg-surface">
+              {props.isDesktop ? (
                 <DesktopRail {...props} activeSessionId={session.id} />
-                {chat}
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle className="bg-zinc-100" />
-            <ResizablePanel defaultSize={53} minSize={34}>
-              <div className="flex h-full min-w-0 flex-col">
-                {viewer}
+              ) : null}
+              {chat}
+            </div>
+          </ResizablePanel>
+          <ResizableHandle
+            withHandle
+            className="dashboard-resize-handle bg-zinc-100"
+          />
+          <ResizablePanel
+            id="dashboard-viewer-panel"
+            defaultSize={53}
+            minSize={34}
+            className={cn(
+              "dashboard-viewer-panel",
+              props.vncDisplayMode !== "embedded" &&
+                "dashboard-viewer-panel-compact",
+            )}
+          >
+            <div className="flex h-full min-w-0 flex-col border-zinc-200 max-md:border-b">
+              {!props.isDesktop ? (
+                <MobileDesktopSwitcher
+                  key="mobile-desktop-switcher"
+                  sessions={props.sessions}
+                  activeSessionId={session.id}
+                  disabled={props.agentStatus !== "idle"}
+                  displayMode={props.vncDisplayMode}
+                  onCreate={props.onCreateDesktop}
+                  onDisplayModeChange={props.onDisplayModeChange}
+                  onRefresh={props.onRefreshDesktop}
+                  onSelect={props.onSelectSession}
+                />
+              ) : null}
+              {viewer}
+              {props.isDesktop ? (
                 <ToolInspector
+                  key="desktop-tool-inspector"
                   event={props.activeEvent}
                   fill={props.vncDisplayMode !== "embedded"}
                 />
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </main>
-      ) : (
-        <main
-          className={cn(
-            "grid min-h-0 flex-1 bg-zinc-100",
-            props.vncDisplayMode === "embedded"
-              ? "grid-rows-[46%_54%]"
-              : "grid-rows-[40px_minmax(0,1fr)]",
-          )}
-        >
-          <section
-            className={cn(
-              "flex min-h-0 flex-col border-b border-zinc-200",
-              props.vncDisplayMode === "embedded"
-                ? "overflow-hidden"
-                : "overflow-visible",
-            )}
-          >
-            <MobileDesktopSwitcher
-              sessions={props.sessions}
-              activeSessionId={session.id}
-              disabled={props.agentStatus !== "idle"}
-              displayMode={props.vncDisplayMode}
-              onCreate={props.onCreateDesktop}
-              onDisplayModeChange={props.onDisplayModeChange}
-              onRefresh={props.onRefreshDesktop}
-              onSelect={props.onSelectSession}
-            />
-            <div className="flex min-h-0 flex-1">{viewer}</div>
-          </section>
-          <section className="flex min-h-0 overflow-hidden bg-surface">
-            {chat}
-          </section>
-        </main>
-      )}
+              ) : null}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </main>
       {props.dialogs}
       {props.tutorial}
     </div>
