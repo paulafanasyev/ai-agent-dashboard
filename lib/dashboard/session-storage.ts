@@ -7,9 +7,10 @@ import { z } from "zod";
 import type { UIMessage } from "ai";
 import { prunedMessages } from "@/lib/utils";
 import type {
-  AgentEvent,
   ChatConversation,
   ChatSession,
+  RuntimeEvent,
+  ToolEvent,
 } from "./types";
 
 export const SESSION_STORAGE_KEY = "ai-agent-dashboard:sessions:v2";
@@ -23,7 +24,7 @@ const storedConversationSchema = z.object({
   updatedAt: z.number(),
   revision: z.number().default(0),
   messages: z.custom<UIMessage[]>((value) => Array.isArray(value)),
-  events: z.custom<AgentEvent[]>((value) => Array.isArray(value)),
+  events: z.custom<ToolEvent[]>((value) => Array.isArray(value)),
   queuedPrompts: z
     .array(
       z.object({
@@ -43,6 +44,9 @@ const storedSessionSchema = z.object({
   updatedAt: z.number(),
   sandboxId: z.string().nullable(),
   generation: z.number(),
+  runtimeEvents: z
+    .custom<RuntimeEvent[]>((value) => Array.isArray(value))
+    .default([]),
   activeConversationId: z.string(),
   conversations: z.array(storedConversationSchema).min(1),
 });
@@ -56,7 +60,7 @@ const legacySessionSchema = z.object({
   generation: z.number(),
   conversationRevision: z.number().default(0),
   messages: z.custom<UIMessage[]>((value) => Array.isArray(value)),
-  events: z.custom<AgentEvent[]>((value) => Array.isArray(value)),
+  events: z.custom<ToolEvent[]>((value) => Array.isArray(value)),
 });
 
 function restoreMessages(messages: UIMessage[]) {
@@ -94,6 +98,7 @@ export function createEmptySession(title = "Desktop session"): ChatSession {
     sandboxId: null,
     generation: 0,
     connectionStatus: "uninitialized",
+    runtimeEvents: [],
     activeConversationId: conversation.id,
     conversations: [conversation],
   };
@@ -140,6 +145,7 @@ export function loadSessions(): ChatSession[] {
         sandboxId: session.sandboxId,
         generation: session.generation,
         connectionStatus: "uninitialized" as const,
+        runtimeEvents: [],
         activeConversationId: conversationId,
         conversations: [
           {
@@ -163,7 +169,7 @@ export function loadSessions(): ChatSession[] {
   }
 }
 
-function redactEventImage(event: AgentEvent): AgentEvent {
+function redactEventImage(event: ToolEvent): ToolEvent {
   if (
     event.kind === "computer" &&
     event.result?.type === "image"

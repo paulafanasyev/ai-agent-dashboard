@@ -10,6 +10,9 @@ import type {
   AgentStatus,
   ComputerAction,
   EventStatus,
+  RuntimeAction,
+  RuntimeEvent,
+  ToolEvent,
 } from "./types";
 
 const computerActions = new Set<ComputerAction>([
@@ -114,10 +117,10 @@ function eventStatus(state: string, result: unknown): EventStatus {
 
 export function syncAgentEvents(
   sessionId: string,
-  existingEvents: AgentEvent[],
+  existingEvents: ToolEvent[],
   messages: UIMessage[],
   now = Date.now(),
-): AgentEvent[] {
+): ToolEvent[] {
   const existingById = new Map(
     existingEvents.map((event) => [event.toolCallId, event]),
   );
@@ -220,7 +223,7 @@ export function syncAgentEvents(
 
 export function deriveAgentStatus(
   chatStatus: "error" | "submitted" | "streaming" | "ready",
-  events: AgentEvent[],
+  events: ToolEvent[],
 ): AgentStatus {
   if (events.some((event) => event.status === "pending")) return "executing";
   if (chatStatus === "submitted" || chatStatus === "streaming") {
@@ -239,8 +242,57 @@ export function eventCounts(events: AgentEvent[]) {
 
 export function eventLabel(event: AgentEvent) {
   if (event.kind === "bash") return "Bash command";
+  if (event.kind === "runtime") {
+    return event.action
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  }
   return event.action
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+export function startRuntimeEvent(
+  sessionId: string,
+  action: RuntimeAction,
+  payload: RuntimeEvent["payload"],
+  now = Date.now(),
+): RuntimeEvent {
+  const id = crypto.randomUUID();
+  return {
+    id,
+    toolCallId: id,
+    sessionId,
+    kind: "runtime",
+    action,
+    payload,
+    timestamp: now,
+    durationMs: null,
+    status: "pending",
+  };
+}
+
+export function finishRuntimeEvent(
+  event: RuntimeEvent,
+  status: Exclude<EventStatus, "pending">,
+  result?: RuntimeEvent["result"],
+  now = Date.now(),
+): RuntimeEvent {
+  return {
+    ...event,
+    status,
+    result,
+    durationMs: Math.max(0, now - event.timestamp),
+  };
+}
+
+export function mergeEventTimeline(
+  toolEvents: ToolEvent[],
+  runtimeEvents: RuntimeEvent[],
+) {
+  return [...toolEvents, ...runtimeEvents].sort(
+    (first, second) => first.timestamp - second.timestamp,
+  );
 }

@@ -11,6 +11,7 @@ import {
   Clock3,
   Code2,
   Crosshair,
+  Cpu,
   ImageIcon,
   MousePointer2,
   TerminalSquare,
@@ -98,7 +99,25 @@ function ToolInspectorComponent({
             </div>
           </div>
 
-          {event.kind === "bash" ? (
+          {event.kind === "runtime" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Detail label="Runtime action" value={event.action} />
+              <Detail label="Source" value={event.payload.source} />
+              <Detail
+                label="Sandbox"
+                value={event.payload.sandboxId ?? "Not allocated yet"}
+              />
+              <Detail
+                label="Detail"
+                value={
+                  event.result?.message ??
+                  event.payload.message ??
+                  "Runtime lifecycle update"
+                }
+                icon={<Cpu className="size-3" />}
+              />
+            </div>
+          ) : event.kind === "bash" ? (
             <div className="space-y-3">
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
@@ -174,11 +193,19 @@ function ToolInspectorComponent({
 
 export const ToolInspector = memo(ToolInspectorComponent);
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
   return (
     <div className="rounded-lg bg-zinc-50 p-3">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-        {label}
+      <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+        {icon}{label}
       </p>
       <p className="mt-1 break-words font-mono text-[11px] text-zinc-700">
         {value}

@@ -361,3 +361,58 @@ export function DeleteDesktopDialog({
     </div>
   );
 }
+
+interface DesktopDialogStackProps {
+  sessions: ChatSession[];
+  createOpen: boolean;
+  deleteSessionId: string | null;
+  renameSessionId: string | null;
+  onCloseCreate: () => void;
+  onCreate: (name: string) => void;
+  onCloseDelete: () => void;
+  onDelete: (sessionId: string) => void;
+  onCloseRename: () => void;
+  onRename: (sessionId: string, name: string) => void;
+}
+
+export function DesktopDialogStack({
+  sessions,
+  createOpen,
+  deleteSessionId,
+  renameSessionId,
+  onCloseCreate,
+  onCreate,
+  onCloseDelete,
+  onDelete,
+  onCloseRename,
+  onRename,
+}: DesktopDialogStackProps) {
+  const deleteSession =
+    sessions.find((session) => session.id === deleteSessionId) ?? null;
+  const renameSession =
+    sessions.find((session) => session.id === renameSessionId) ?? null;
+
+  return (
+    <>
+      <CreateDesktopDialog
+        open={createOpen}
+        existingNames={sessions.map((session) => session.title)}
+        onCancel={onCloseCreate}
+        onCreate={onCreate}
+      />
+      <DeleteDesktopDialog
+        session={deleteSession}
+        onCancel={onCloseDelete}
+        onConfirm={onDelete}
+      />
+      <RenameDesktopDialog
+        session={renameSession}
+        existingNames={sessions
+          .filter((session) => session.id !== renameSessionId)
+          .map((session) => session.title)}
+        onCancel={onCloseRename}
+        onRename={onRename}
+      />
+    </>
+  );
+}

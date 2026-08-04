@@ -33,12 +33,19 @@ function truncate(value: string, maxLength = 72) {
 }
 
 export function eventSurface(event: AgentEvent) {
+  if (event.kind === "runtime") return "Desktop runtime";
   return event.kind === "bash"
     ? "Background command"
     : "Visible desktop action";
 }
 
 export function describeAgentEvent(event: AgentEvent) {
+  if (event.kind === "runtime") {
+    return {
+      title: eventLabelForRuntime(event.action),
+      detail: event.payload.message ?? event.result?.message ?? null,
+    };
+  }
   if (event.kind === "bash") {
     return {
       title: "Running a terminal command",
@@ -61,4 +68,16 @@ export function describeAgentEvent(event: AgentEvent) {
     title: computerActionLabels[event.action] ?? "Operating the remote desktop",
     detail,
   };
+}
+
+function eventLabelForRuntime(action: string) {
+  const labels: Record<string, string> = {
+    sandbox_create: "Creating the isolated desktop",
+    sandbox_reconnect: "Reconnecting to the desktop",
+    sandbox_health_check: "Checking desktop health",
+    sandbox_destroy: "Destroying the isolated desktop",
+    vnc_connect: "Connecting the live desktop",
+    vnc_disconnect: "Live desktop disconnected",
+  };
+  return labels[action] ?? "Updating the desktop runtime";
 }

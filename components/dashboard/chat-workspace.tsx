@@ -25,14 +25,16 @@ import { PromptSuggestions } from "@/components/prompt-suggestions";
 import type { ClientModelConfig } from "@/lib/ai/model-config";
 import {
   deriveAgentStatus,
+  mergeEventTimeline,
   syncAgentEvents,
 } from "@/lib/dashboard/events";
 import type {
-  AgentEvent,
   AgentStatus,
   ChatConversation,
   ConnectionStatus,
   QueuedPrompt,
+  RuntimeEvent,
+  ToolEvent,
 } from "@/lib/dashboard/types";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
 import { ABORTED } from "@/lib/utils";
@@ -50,7 +52,8 @@ interface ChatWorkspaceProps {
   conversations: ChatConversation[];
   sandboxId: string | null;
   initialMessages: UIMessage[];
-  initialEvents: AgentEvent[];
+  initialEvents: ToolEvent[];
+  runtimeEvents: RuntimeEvent[];
   initialQueuedPrompts: QueuedPrompt[];
   modelConfig: ClientModelConfig;
   connectionReady: boolean;
@@ -63,7 +66,7 @@ interface ChatWorkspaceProps {
     sessionId: string,
     conversationId: string,
     messages: UIMessage[],
-    events: AgentEvent[],
+    events: ToolEvent[],
   ) => void;
   onQueueChange: (
     sessionId: string,
@@ -81,6 +84,7 @@ function ChatWorkspaceComponent({
   sandboxId,
   initialMessages,
   initialEvents,
+  runtimeEvents,
   initialQueuedPrompts,
   modelConfig,
   connectionReady,
@@ -97,10 +101,10 @@ function ChatWorkspaceComponent({
   const eventsRef = useRef(initialEvents);
   const composerRef = useRef<HTMLInputElement>(null);
   const lastSyncedMessagesRef = useRef<UIMessage[] | null>(null);
-  const lastSyncedEventsRef = useRef<AgentEvent[] | null>(null);
+  const lastSyncedEventsRef = useRef<ToolEvent[] | null>(null);
   const pendingConversationSyncRef = useRef<{
     messages: UIMessage[];
-    events: AgentEvent[];
+    events: ToolEvent[];
   } | null>(null);
   const conversationSyncTimerRef = useRef<number | null>(null);
   const queueRef = useRef(initialQueuedPrompts);
@@ -159,6 +163,10 @@ function ChatWorkspaceComponent({
   }, [conversationId, messages]);
 
   const agentStatus = deriveAgentStatus(status, events);
+  const timelineEvents = useMemo(
+    () => mergeEventTimeline(events, runtimeEvents),
+    [events, runtimeEvents],
+  );
   const isLoading = status === "submitted" || status === "streaming";
 
   const replaceQueue = useCallback(
@@ -355,7 +363,7 @@ function ChatWorkspaceComponent({
           />
           {events.length > 0 ? (
             <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
-              {events.length} events
+              {timelineEvents.length} events
             </span>
           ) : null}
         </div>
@@ -416,7 +424,11 @@ function ChatWorkspaceComponent({
         }
       />
 
-      <DebugPanel events={events} />
+      <DebugPanel
+        events={timelineEvents}
+        selectedEventId={selectedEventId}
+        onSelectEvent={onSelectEvent}
+      />
 
       <div className="shrink-0 bg-surface px-3 pb-3 pt-1">
         <form onSubmit={submitComposer}>
@@ -463,6 +475,7 @@ export const ChatWorkspace = memo(
     previous.modelConfig === next.modelConfig &&
     previous.connectionReady === next.connectionReady &&
     previous.connectionStatus === next.connectionStatus &&
+    previous.runtimeEvents === next.runtimeEvents &&
     previous.selectedEventId === next.selectedEventId &&
     previous.onCreateConversation === next.onCreateConversation &&
     previous.onSelectConversation === next.onSelectConversation &&

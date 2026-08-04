@@ -1,9 +1,3 @@
-<!--
-File: README.md
-Purpose: Explain the product, architecture, setup, deployment, and validation workflow.
-Problem solved: Gives reviewers and contributors one reliable entry point for understanding and running the project.
--->
-
 Author: Cheng LIANG(Ray)
 
 # AI Agent Dashboard
@@ -12,7 +6,12 @@ Author: Cheng LIANG(Ray)
   An observable, session-aware computer-use agent dashboard built from Vercel Labs' AI SDK Computer Use demo.
 </p>
 
-> Bootstrap status: the upstream Vercel Sandbox execution path is preserved and verified. Dashboard observability, session isolation, and the E2B runtime adapter will be added in reviewable milestones.
+**Live deployment:** [ai-agent-dashboard-fawn-ten.vercel.app](https://ai-agent-dashboard-fawn-ten.vercel.app)
+
+The upstream Vercel Sandbox execution path is preserved behind the server-side
+runtime modules. Dashboard observability, isolated desktop sessions, typed tool
+and runtime events, responsive layouts, automated tests, and first-run guidance
+are implemented on `main`.
 
 <p align="center">
   <a href="#features"><strong>Features</strong></a> ·
@@ -31,7 +30,8 @@ Author: Cheng LIANG(Ray)
 - Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
 - Mobile stacked workspace with the live VNC desktop above the always-available conversation composer and desktop switching at the top.
 - One-click VNC minimization and draggable, viewport-constrained picture-in-picture without recreating the remote desktop iframe.
-- Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a collapsible debug timeline.
+- Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a selectable debug timeline.
+- Unified instrumentation for Sandbox and noVNC lifecycle events, including ID, timestamp, status, and duration.
 - Copy controls on user and agent text with inline confirmation and toast feedback.
 - Global hover and keyboard-focus tooltips that explain every button from its accessible name or visible label.
 - Visible-first browser automation plus a live VNC activity overlay that distinguishes desktop actions from background commands.
@@ -72,7 +72,9 @@ The app spins up a Vercel Sandbox from a pre-built snapshot that includes:
 - **Google Chrome** — auto-launched so the AI agent has a browser ready
 - **xdotool + ImageMagick** — for mouse/keyboard control and screenshots
 
-When a user sends a message, the selected model uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. Web, weather, search, and other current-information requests are deterministically routed to `computer` for the first step, so the agent must inspect the visible browser instead of answering from memory or using a hidden HTTP command. Claude uses Anthropic's native computer-use tools; Kimi K3 uses provider-neutral function tools and receives screenshots as multimodal input. Tool invocations are normalized into discriminated event records that power the inline cards, debug timeline, metrics, and expanded inspector. The memoized noVNC viewer is displayed in a horizontally resizable panel and receives no chat-message props.
+When a user sends a message, the selected model uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. Web, weather, search, and other current-information requests are deterministically routed to `computer` for the first step, so the agent must inspect the visible browser instead of answering from memory or using a hidden HTTP command. Claude uses Anthropic's native computer-use tools; Kimi K3 uses provider-neutral function tools and receives screenshots as multimodal input.
+
+Tool invocations are normalized into discriminated event records that power the inline cards, debug timeline, metrics, and expanded inspector. Sandbox and noVNC lifecycle actions use the same event envelope while remaining session-owned rather than conversation-owned. The memoized noVNC viewer is displayed in a horizontally resizable panel and receives no chat-message props.
 
 Each browser-local desktop session owns one sandbox ID and runtime generation, plus multiple conversations with independent messages, event metadata, and queued prompts. Starting or switching a conversation preserves the desktop state; creating a new desktop session allocates a separate sandbox. The composer remains available while the desktop starts or the agent runs: follow-ups enter a visible FIFO queue and dispatch only after the viewer and runtime are ready. Full screenshot payloads are deliberately redacted before `localStorage` persistence to avoid exhausting the browser storage quota.
 
@@ -81,24 +83,24 @@ Each browser-local desktop session owns one sandbox ID and runtime generation, p
 ```
 Desktop session ──→ Conversations ──→ AI SDK ──→ Claude / Kimi K3
      │                    │                            │
-     │                    └─→ typed event projection ←┤
-     ├── localStorage                 │                ↓
-     │                                ├─ inline cards  computer/bash tools
-     │                                └─ inspector            │
+     │                    └─→ typed tool events ←─────┤
+     ├── runtime events ───────────────┐               ↓
+     ├── localStorage                  ├─ debug timeline / inspector
      └── sandbox id ──→ memoized VNC viewer ←── Vercel Sandbox
 ```
 
 ## Deploy Your Own
 
-You can deploy your own version to Vercel by clicking the button below:
+The reviewed production build is available at the [live deployment](https://ai-agent-dashboard-fawn-ten.vercel.app).
+Deploy your own copy from this repository with the button below:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=AI+SDK+Computer+Use+Demo&repository-name=ai-sdk-computer-use&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fai-sdk-computer-use&demo-title=AI+SDK+Computer+Use+Demo&demo-url=https%3A%2F%2Fai-sdk-computer-use.vercel.app%2F&demo-description=A+chatbot+application+built+with+Next.js+demonstrating+Anthropic+Claude+Sonnet+4.5+computer+use+capabilities+with+Vercel+Sandboxes&env=ANTHROPIC_API_KEY,SANDBOX_SNAPSHOT_ID)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=ai-agent-dashboard&repository-name=ai-agent-dashboard&repository-url=https%3A%2F%2Fgithub.com%2FCHENG-LIANG1%2Fai-agent-dashboard&demo-title=AI%20Agent%20Dashboard&demo-url=https%3A%2F%2Fai-agent-dashboard-fawn-ten.vercel.app&env=ANTHROPIC_API_KEY,SANDBOX_SNAPSHOT_ID)
 
 ## Running Locally
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.19+
 - A [Vercel](https://vercel.com) account (for Sandbox access)
 - An [Anthropic API key](https://console.anthropic.com/) for the project default, or a Kimi API key supplied through BYOK
 
@@ -177,8 +179,18 @@ Only enter a personal key on a deployment whose source and operator you trust.
 pnpm check
 ```
 
-This runs ESLint, TypeScript validation, and a production build—the same checks
-used in CI.
+This runs ESLint, TypeScript validation, deterministic unit tests, and a
+production build—the same core checks used in CI. Critical responsive UI flows
+also run in Chromium:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+The browser suite covers first-open tutorial persistence, replay from Settings,
+and named Desktop creation at desktop and mobile breakpoints without requiring
+a live Sandbox credential.
 
 ## Environment Variables
 

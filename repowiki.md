@@ -106,13 +106,15 @@ app/
   api/kill-desktop/route.ts      Sandbox cleanup endpoint
   globals.css                    Design tokens and global animation styles
   layout.tsx                     Root metadata, fonts, analytics, and toasts
-  page.tsx                       Dashboard composition and session coordination
+  page.tsx                       Thin dashboard controller and composition root
 
 components/
   dashboard/
     agent-activity.tsx           Live observable agent feedback
     chat-workspace.tsx           AI SDK chat lifecycle and event synchronization
     conversation-switcher.tsx    Accessible custom conversation listbox
+    dashboard-shell.tsx          Responsive presentation-only composition
+    desktop-session-item.tsx     Desktop row, tooltip, and action menu
     desktop-dialogs.tsx          Create, rename, and delete confirmation dialogs
     debug-panel.tsx              Collapsible event store and counters
     mobile-desktop-switcher.tsx  Mobile desktop navigation and status controls
@@ -137,9 +139,14 @@ lib/
     kimi.ts                      OpenAI-compatible model and image middleware
     model-config.ts              Model configuration types and validation helpers
   dashboard/
-    events.ts                    Tool invocation normalization and derived state
+    events.ts                    Tool/runtime event normalization and derived state
+    presentation.ts              Stable labels and presentation keys
     session-storage.ts           Versioned browser persistence and redaction
     types.ts                     Event and session contracts
+    use-dashboard-persistence.ts Session hydration and persistence
+    use-dashboard-tutorial.ts    First-open tutorial state
+    use-desktop-layout.ts        Responsive breakpoint projection
+    use-desktop-runtime.ts       Sandbox/noVNC lifecycle orchestration
   sandbox/
     actions.ts                   Shared computer and Bash execution
     config.ts                    Desktop resolution
@@ -153,17 +160,18 @@ docs/adr/                        Architecture decision records
 
 ## 6. Browser Composition and State Ownership
 
-`app/page.tsx` is the composition root. It intentionally owns state shared by
-multiple dashboard regions:
+`app/page.tsx` is the composition root. Purpose-specific hooks own persistence
+and runtime orchestration, while the page coordinates cross-region selections:
 
 | State | Owner | Consumers |
 |---|---|---|
-| Desktop sessions and active session | Dashboard page | Sidebar, chat, VNC, inspector |
+| Desktop sessions and active session | Persistence hook | Sidebar, chat, VNC, inspector |
 | Conversations and active conversation | Individual desktop session | Chat, debug panel, inspector, persistence |
-| Sandbox stream URLs | Dashboard page | VNC viewer |
+| Sandbox stream URLs | Desktop runtime hook | VNC viewer |
 | Selected event ID | Dashboard page | Inline cards and tool inspector |
 | Current agent status | Dashboard page | Header metrics and interaction guards |
-| Model configuration | Dashboard page | Model settings and chat request body |
+| Model configuration | Persistence hook | Model settings and chat request body |
+| Sandbox/noVNC lifecycle events | Individual desktop session | Debug panel, inspector, persistence |
 | Messages and projected events | Individual conversation | Chat, debug panel, inspector, persistence |
 | Queued prompts | Individual conversation | Queue list, composer, FIFO dispatcher, persistence |
 | Chat input and stream status | Chat workspace | Composer and activity feedback |
@@ -546,7 +554,8 @@ rendering boundaries:
 AI SDK tool invocation parts are normalized into a discriminated union:
 
 ```ts
-type AgentEvent = ComputerEvent | BashEvent;
+type ToolEvent = ComputerEvent | BashEvent;
+type AgentEvent = ToolEvent | RuntimeEvent;
 ```
 
 Common fields include:
@@ -558,16 +567,18 @@ Common fields include:
 - `durationMs`
 - `status`
 
-The `kind` discriminator separates `computer` and `bash` payloads. Computer
+The `kind` discriminator separates `computer`, `bash`, and `runtime` payloads. Computer
 events store the normalized action, coordinates, optional text, scroll data,
 target metadata, and screenshot or text results. Bash events store the command
-and output.
+and output. Runtime events record Sandbox create/reconnect/health/destroy and
+noVNC connect/disconnect lifecycles at the Desktop session level.
 
 ### Projection
 
 `syncAgentEvents()` scans message parts, indexes existing events by tool-call ID,
 and updates each event as the AI SDK invocation changes from a request to a
-result. Events are sorted chronologically after synchronization.
+result. Runtime helpers record pending and terminal states with the same event
+envelope. Tool and runtime streams are merged chronologically for presentation.
 
 ### Derived state
 
@@ -719,21 +730,25 @@ The repository exposes the following checks:
 ```bash
 pnpm lint
 pnpm typecheck
+pnpm test
+pnpm test:e2e
 pnpm build
 pnpm check
 ```
 
-`pnpm check` runs linting, TypeScript validation, and a production build. CI runs
-the same command for pushes to `main` and pull requests.
+`pnpm check` runs linting, TypeScript validation, unit tests, and a production
+build. CI runs the same command plus the Chromium browser suite for pushes to
+`main` and pull requests.
 
-Recommended future automated coverage:
+Current automated coverage includes:
 
 - Event lifecycle and ordering tests.
-- Session serialization, migration, and screenshot redaction tests.
-- Model configuration and custom URL validation tests.
-- A render-count regression test for the VNC viewer.
-- End-to-end Claude and Kimi tool-call flows.
-- Desktop creation, reconnect, deletion, and failure recovery tests.
+- Session serialization and runtime-event persistence tests.
+- First-open tutorial persistence and Settings replay in Chromium.
+- Named Desktop creation at desktop and mobile breakpoints.
+
+Future coverage should add model configuration validation, a VNC render-count
+regression, live Claude/Kimi tool-call flows, and Sandbox failure recovery.
 
 ## 19. Environment Configuration
 

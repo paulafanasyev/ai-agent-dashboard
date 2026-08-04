@@ -38,3 +38,9 @@ jobs:
 
       - name: Validate project
         run: pnpm check
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: pnpm test:e2e

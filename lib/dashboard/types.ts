@@ -73,7 +73,29 @@ export interface BashEvent extends EventBase {
   result?: { output: string };
 }
 
-export type AgentEvent = ComputerEvent | BashEvent;
+export type RuntimeAction =
+  | "sandbox_create"
+  | "sandbox_reconnect"
+  | "sandbox_health_check"
+  | "sandbox_destroy"
+  | "vnc_connect"
+  | "vnc_disconnect";
+
+export interface RuntimeEvent extends EventBase {
+  kind: "runtime";
+  action: RuntimeAction;
+  payload: {
+    sandboxId?: string;
+    source: "system" | "user" | "viewer";
+    message?: string;
+  };
+  result?: {
+    message?: string;
+  };
+}
+
+export type ToolEvent = ComputerEvent | BashEvent;
+export type AgentEvent = ToolEvent | RuntimeEvent;
 
 export interface QueuedPrompt {
   id: string;
@@ -88,7 +110,7 @@ export interface ChatConversation {
   updatedAt: number;
   revision: number;
   messages: UIMessage[];
-  events: AgentEvent[];
+  events: ToolEvent[];
   queuedPrompts: QueuedPrompt[];
 }
 
@@ -101,6 +123,7 @@ export interface ChatSession {
   sandboxId: string | null;
   generation: number;
   connectionStatus: ConnectionStatus;
+  runtimeEvents: RuntimeEvent[];
   activeConversationId: string;
   conversations: ChatConversation[];
 }

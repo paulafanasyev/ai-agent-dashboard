@@ -22,10 +22,11 @@ SDK objects in React state would also make session lifecycle and testing harder.
 
 ## Decision
 
-Keep the verified Vercel Sandbox path as the baseline, then introduce a typed
-`DesktopRuntime` boundary before adding an E2B adapter. Agent instrumentation
-will wrap that boundary so VM lifecycle events, computer actions, and bash calls
-have one provider-independent event model.
+Keep the verified Vercel Sandbox path as the production runtime and isolate it
+inside `lib/sandbox`. The dashboard owns a provider-independent, discriminated
+event model: conversations store computer and bash tool events, while each
+Desktop session stores Sandbox and noVNC lifecycle events. Both streams are
+merged chronologically for the debug timeline and inspector.
 
 The runtime will be selected with server-side configuration. Provider SDK
 objects and credentials must not cross the server boundary or be persisted in
@@ -34,7 +35,7 @@ browser storage.
 ## Consequences
 
 - The imported demo remains runnable while the dashboard is developed.
-- Vercel Sandbox and E2B can share tool contracts and instrumentation.
+- A future E2B adapter can share the tool contracts and lifecycle instrumentation.
 - Session-to-VM ownership can be enforced above either provider.
-- The project temporarily carries two runtime implementations during migration.
-- Provider capability differences require explicit mapping and contract tests.
+- Provider capability differences would require explicit mapping and contract tests.
+- Runtime lifecycle history is capped per session to protect browser storage.

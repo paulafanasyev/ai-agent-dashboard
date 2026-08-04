@@ -11,7 +11,17 @@ import { eventCounts, eventLabel } from "@/lib/dashboard/events";
 import type { AgentEvent } from "@/lib/dashboard/types";
 import { cn } from "@/lib/utils";
 
-function DebugPanelComponent({ events }: { events: AgentEvent[] }) {
+interface DebugPanelProps {
+  events: AgentEvent[];
+  selectedEventId?: string | null;
+  onSelectEvent?: (eventId: string) => void;
+}
+
+function DebugPanelComponent({
+  events,
+  selectedEventId,
+  onSelectEvent,
+}: DebugPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const counts = useMemo(() => eventCounts(events), [events]);
 
@@ -59,9 +69,16 @@ function DebugPanelComponent({ events }: { events: AgentEvent[] }) {
             </div>
           ) : (
             events.map((event) => (
-              <div
+              <button
+                type="button"
                 key={event.id}
-                className="grid grid-cols-[64px_1fr_auto] gap-2 border-b border-white/5 py-1.5 last:border-0"
+                onClick={() => onSelectEvent?.(event.id)}
+                aria-pressed={selectedEventId === event.id}
+                className={cn(
+                  "grid w-full grid-cols-[64px_1fr_auto] gap-2 border-b border-white/5 py-1.5 text-left last:border-0",
+                  onSelectEvent && "hover:text-white",
+                  selectedEventId === event.id && "text-violet-300",
+                )}
               >
                 <span className="text-zinc-500">
                   {new Date(event.timestamp).toLocaleTimeString([], {
@@ -85,7 +102,7 @@ function DebugPanelComponent({ events }: { events: AgentEvent[] }) {
                 >
                   {event.status}
                 </span>
-              </div>
+              </button>
             ))
           )}
         </div>
