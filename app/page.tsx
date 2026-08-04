@@ -85,6 +85,8 @@ export default function DashboardPage() {
     closeCreateSession,
     createConversation,
     selectConversation,
+    renameConversation,
+    deleteConversation,
     selectSession,
     deleteSession,
     requestDeleteSession,
@@ -290,6 +292,8 @@ export default function DashboardPage() {
       onTogglePin={togglePinSession}
       onCreateConversation={createConversation}
       onSelectConversation={selectConversation}
+      onRenameConversation={renameConversation}
+      onDeleteConversation={deleteConversation}
       onSelectEvent={setSelectedEventId}
       onConversationChange={updateConversation}
       onQueueChange={updatePromptQueue}

@@ -9,6 +9,7 @@ import {
   ACTIVE_SESSION_STORAGE_KEY,
   SESSION_STORAGE_KEY,
   createEmptySession,
+  getNextDesktopName,
   loadSessions,
   persistSessions,
 } from "@/lib/dashboard/session-storage";
@@ -24,6 +25,14 @@ describe("session storage", () => {
       setItem: (key: string, value: string) => values.set(key, value),
       removeItem: (key: string) => values.delete(key),
     });
+  });
+
+  it("increments default Desktop names from the current sequence", () => {
+    expect(getNextDesktopName([])).toBe("Desktop 1");
+    expect(getNextDesktopName(["Desktop 1"])).toBe("Desktop 2");
+    expect(
+      getNextDesktopName(["Desktop 1", "QA desktop", "Desktop 3"]),
+    ).toBe("Desktop 4");
   });
 
   it("round-trips isolated conversations and runtime lifecycle events", () => {

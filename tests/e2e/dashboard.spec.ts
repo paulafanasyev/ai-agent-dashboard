@@ -73,6 +73,25 @@ test("buttons do not show automatic tooltips", async ({ page }) => {
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
+test("shows desktop details when hovering its icon", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile-chromium",
+    "Mobile navigation has no hover-only Desktop rail.",
+  );
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Switch to Desktop 1" }).hover();
+  const tooltip = page.getByRole("tooltip", { name: "Desktop 1 details" });
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip.getByText("Not started", { exact: true })).toBeVisible();
+  await expect(tooltip.getByText("1", { exact: true })).toBeVisible();
+  await expect(tooltip.getByText("Not allocated", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Open settings" }).hover();
+  await expect(tooltip).toHaveCount(0);
+});
+
 test("keeps the VNC viewer mounted across the responsive breakpoint", async ({
   page,
 }) => {
@@ -143,6 +162,110 @@ test("creates a named desktop without a live Sandbox dependency", async ({ page 
   await expect(notification).toBeVisible();
   await page.getByRole("button", { name: "Dismiss notification" }).click();
   await expect(notification).toHaveCount(0);
+});
+
+test("increments the default name for each new desktop", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New desktop" }).click();
+  let dialog = page.getByRole("dialog", { name: "Create desktop" });
+  await expect(dialog.getByLabel("Desktop name")).toHaveValue("Desktop 2");
+  await dialog
+    .getByRole("button", { name: "Create desktop", exact: true })
+    .click();
+  await expect(page.getByText("Desktop 2", { exact: true }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "New desktop" }).click();
+  dialog = page.getByRole("dialog", { name: "Create desktop" });
+  await expect(dialog.getByLabel("Desktop name")).toHaveValue("Desktop 3");
+});
+
+test("edits and deletes conversations from hover actions without a selected check", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    ({ completedTutorialKey, sessionsKey }) => {
+      const now = Date.now();
+      localStorage.setItem(completedTutorialKey, "complete");
+      localStorage.setItem(
+        sessionsKey,
+        JSON.stringify([
+          {
+            id: "desktop-1",
+            title: "Desktop 1",
+            pinned: false,
+            createdAt: now,
+            updatedAt: now,
+            sandboxId: null,
+            generation: 0,
+            runtimeEvents: [],
+            activeConversationId: "conversation-1",
+            conversations: [
+              {
+                id: "conversation-1",
+                title: "First conversation",
+                createdAt: now,
+                updatedAt: now,
+                revision: 0,
+                messages: [],
+                events: [],
+                queuedPrompts: [],
+              },
+              {
+                id: "conversation-2",
+                title: "Second conversation",
+                createdAt: now,
+                updatedAt: now,
+                revision: 0,
+                messages: [],
+                events: [],
+                queuedPrompts: [],
+              },
+            ],
+          },
+        ]),
+      );
+    },
+    {
+      completedTutorialKey: tutorialKey,
+      sessionsKey: "ai-agent-dashboard:sessions:v2",
+    },
+  );
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Choose conversation" }).click();
+  const firstOption = page.getByRole("option", {
+    name: /First conversation/,
+  });
+  await expect(firstOption).toHaveAttribute("aria-selected", "true");
+  await expect(firstOption.locator("svg")).toHaveCount(0);
+  await firstOption.hover();
+  await page.getByRole("button", { name: "Edit First conversation" }).click();
+
+  const editDialog = page.getByRole("dialog", { name: "Edit conversation" });
+  await editDialog.getByLabel("Conversation name").fill("Renamed conversation");
+  await editDialog.getByRole("button", { name: "Save" }).click();
+  await expect(
+    page.getByRole("button", { name: "Choose conversation" }),
+  ).toContainText("Renamed conversation");
+
+  await page.getByRole("button", { name: "Choose conversation" }).click();
+  const renamedOption = page.getByRole("option", {
+    name: /Renamed conversation/,
+  });
+  await renamedOption.hover();
+  await page.getByRole("button", { name: "Delete Renamed conversation" }).click();
+  const deleteDialog = page.getByRole("alertdialog", {
+    name: "Delete conversation?",
+  });
+  await deleteDialog
+    .getByRole("button", { name: "Delete conversation" })
+    .click();
+
+  await expect(
+    page.getByRole("button", { name: "Choose conversation" }),
+  ).toContainText("Second conversation");
 });
 
 test("clears all sessions only after the exact confirmation phrase", async ({

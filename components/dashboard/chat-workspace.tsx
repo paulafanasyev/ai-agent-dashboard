@@ -38,7 +38,7 @@ import { openApiSettings } from "@/lib/dashboard/settings-events";
 import { useConversationQueue } from "@/lib/dashboard/use-conversation-queue";
 import { useConversationSync } from "@/lib/dashboard/use-conversation-sync";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
-import { ABORTED } from "@/lib/utils";
+import { ABORTED, prunedMessages } from "@/lib/utils";
 import { AgentActivity } from "./agent-activity";
 import { ConversationSwitcher } from "./conversation-switcher";
 import { DebugPanel } from "./debug-panel";
@@ -61,6 +61,8 @@ interface ChatWorkspaceProps {
   selectedEventId: string | null;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
+  onRenameConversation: (conversationId: string, name: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
   onSelectEvent: (eventId: string) => void;
   onConversationChange: (
     sessionId: string,
@@ -93,6 +95,8 @@ function ChatWorkspaceComponent({
   selectedEventId,
   onCreateConversation,
   onSelectConversation,
+  onRenameConversation,
+  onDeleteConversation,
   onSelectEvent,
   onConversationChange,
   onQueueChange,
@@ -119,6 +123,15 @@ function ChatWorkspaceComponent({
     id: `${sessionId}:${conversationId}:${conversationRevision}`,
     initialMessages,
     body: { sandboxId, modelConfig, desktopReady: connectionReady },
+    experimental_prepareRequestBody: ({ messages: requestMessages }) => ({
+      messages: prunedMessages(requestMessages, {
+        compactPriorToolCalls: true,
+        preserveLatestScreenshot: true,
+      }),
+      sandboxId,
+      modelConfig,
+      desktopReady: connectionReady,
+    }),
     maxSteps: 30,
     onError: (error) => {
       const activePrompt = activePromptRef.current;
@@ -134,11 +147,11 @@ function ChatWorkspaceComponent({
         return;
       }
       activePromptRef.current = null;
+      const message = error.message.trim();
       toast.error("Model request failed", {
-        description:
-          modelConfig.provider === "anthropic"
-            ? "Check the project's Claude configuration and try again."
-            : "Check the API key, Base URL, model ID, and account balance.",
+        description: message
+          ? message.slice(0, 240)
+          : "The model request ended without an error message. Retry this conversation once.",
         richColors: true,
         position: "top-center",
       });
@@ -270,6 +283,8 @@ function ChatWorkspaceComponent({
             activeConversationId={conversationId}
             disabled={isLoading}
             onSelect={onSelectConversation}
+            onRename={onRenameConversation}
+            onDelete={onDeleteConversation}
           />
           {events.length > 0 ? (
             <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">

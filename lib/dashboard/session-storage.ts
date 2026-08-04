@@ -17,6 +17,17 @@ export const SESSION_STORAGE_KEY = "ai-agent-dashboard:sessions:v2";
 export const ACTIVE_SESSION_STORAGE_KEY = "ai-agent-dashboard:active-session";
 const LEGACY_SESSION_STORAGE_KEY = "ai-agent-dashboard:sessions:v1";
 
+/** Returns the next sequential default Desktop name without colliding with existing names. */
+export function getNextDesktopName(existingNames: string[]): string {
+  const highestDesktopNumber = existingNames.reduce((highest, name) => {
+    const match = /^Desktop (\d+)$/.exec(name.trim());
+    if (!match) return highest;
+    return Math.max(highest, Number(match[1]));
+  }, 0);
+
+  return `Desktop ${Math.max(existingNames.length, highestDesktopNumber) + 1}`;
+}
+
 const storedConversationSchema = z.object({
   id: z.string(),
   title: z.string(),

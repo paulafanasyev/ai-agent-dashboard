@@ -16,6 +16,7 @@ import {
   ACTIVE_SESSION_STORAGE_KEY,
   SESSION_STORAGE_KEY,
   createEmptySession,
+  getNextDesktopName,
   loadSessions,
   persistSessions,
 } from "@/lib/dashboard/session-storage";
@@ -45,7 +46,7 @@ export function useDashboardPersistence() {
     const nextSessions =
       loadedSessions.length > 0 || hasSnapshot
         ? loadedSessions
-        : [createEmptySession("Desktop 1")];
+        : [createEmptySession(getNextDesktopName([]))];
     const storedActiveId = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
     const nextActiveId =
       nextSessions.length === 0

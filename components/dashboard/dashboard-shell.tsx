@@ -62,6 +62,8 @@ interface DashboardShellProps {
   onTogglePin: (sessionId: string) => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
+  onRenameConversation: (conversationId: string, name: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
   onSelectEvent: (eventId: string | null) => void;
   onConversationChange: (
     sessionId: string,
@@ -178,6 +180,8 @@ export function DashboardShell(props: DashboardShellProps) {
       selectedEventId={props.selectedEventId}
       onCreateConversation={props.onCreateConversation}
       onSelectConversation={props.onSelectConversation}
+      onRenameConversation={props.onRenameConversation}
+      onDeleteConversation={props.onDeleteConversation}
       onSelectEvent={props.onSelectEvent}
       onConversationChange={props.onConversationChange}
       onQueueChange={props.onQueueChange}

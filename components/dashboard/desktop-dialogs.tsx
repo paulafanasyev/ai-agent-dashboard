@@ -10,9 +10,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getNextDesktopName } from "@/lib/dashboard/session-storage";
 import type { ChatSession } from "@/lib/dashboard/types";
-
-export const DEFAULT_DESKTOP_NAME = "Desktop 123";
 
 interface CreateDesktopDialogProps {
   open: boolean;
@@ -28,13 +27,14 @@ export function CreateDesktopDialog({
   onCancel,
   onCreate,
 }: CreateDesktopDialogProps) {
-  const [name, setName] = useState(DEFAULT_DESKTOP_NAME);
+  const defaultName = getNextDesktopName(existingNames);
+  const [name, setName] = useState(defaultName);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    setName(DEFAULT_DESKTOP_NAME);
+    setName(defaultName);
     setError(null);
     const frame = window.requestAnimationFrame(() => inputRef.current?.select());
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -45,7 +45,7 @@ export function CreateDesktopDialog({
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [onCancel, open]);
+  }, [defaultName, onCancel, open]);
 
   if (!open) return null;
 
@@ -136,7 +136,7 @@ export function CreateDesktopDialog({
               </p>
             ) : (
               <p className="text-[10px] text-zinc-400">
-                Default: {DEFAULT_DESKTOP_NAME}
+                Default: {defaultName}
               </p>
             )}
           </div>
