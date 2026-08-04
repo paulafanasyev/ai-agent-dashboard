@@ -144,7 +144,10 @@ test("unconfigured composer links to API settings through a notification", async
   await expect(
     page.getByRole("heading", { name: "API Configuration" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Provider")).toBeVisible();
+  await expect(page.getByLabel("Provider")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add config" }).first().click();
+  const editor = page.getByRole("dialog", { name: "Add API configuration" });
+  await expect(editor.getByLabel("Provider")).toBeVisible();
 });
 
 test("migrates the previous single API setting and labels it by model ID", async ({
@@ -385,7 +388,12 @@ test("manages multiple API configurations and selects one per conversation", asy
   await expect(page.getByText("BYOK deployment")).toHaveCount(0);
   await expect(page.getByText("Project Claude", { exact: true })).toHaveCount(0);
 
-  const provider = page.getByLabel("Provider");
+  await expect(page.getByLabel("API Key")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add config" }).first().click();
+  const addDialog = page.getByRole("dialog", {
+    name: "Add API configuration",
+  });
+  const provider = addDialog.getByLabel("Provider");
   await expect(provider).toHaveValue("anthropic-byok");
   await expect(provider.locator("option")).toHaveText([
     "Anthropic",
@@ -394,9 +402,15 @@ test("manages multiple API configurations and selects one per conversation", asy
     "OpenAI-compatible",
   ]);
 
-  await page.locator("#byok-api-key").fill("sk-ant-e2e-browser-only");
-  await page.getByLabel("Model ID").fill("claude-test-model");
-  await page.getByRole("button", { name: "Add configuration" }).click();
+  await addDialog.locator("#byok-api-key").fill("sk-ant-e2e-browser-only");
+  await addDialog.getByLabel("Model ID").fill("claude-test-model");
+  await addDialog
+    .getByRole("button", { name: "Add configuration" })
+    .click();
+  await expect(addDialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Edit claude-test-model" }),
+  ).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -409,10 +423,18 @@ test("manages multiple API configurations and selects one per conversation", asy
     .not.toContain("sk-ant-e2e-browser-only");
 
   await page.getByRole("button", { name: "Add config" }).click();
-  await provider.selectOption("deepseek");
-  await page.locator("#byok-api-key").fill("sk-deepseek-e2e-only");
-  await expect(page.getByLabel("Model ID")).toHaveValue("deepseek-v4-flash");
-  await page.getByRole("button", { name: "Add configuration" }).click();
+  const deepSeekDialog = page.getByRole("dialog", {
+    name: "Add API configuration",
+  });
+  const deepSeekProvider = deepSeekDialog.getByLabel("Provider");
+  await deepSeekProvider.selectOption("deepseek");
+  await deepSeekDialog.locator("#byok-api-key").fill("sk-deepseek-e2e-only");
+  await expect(deepSeekDialog.getByLabel("Model ID")).toHaveValue(
+    "deepseek-v4-flash",
+  );
+  await deepSeekDialog
+    .getByRole("button", { name: "Add configuration" })
+    .click();
 
   await page.getByRole("button", { name: "Close settings" }).click();
   const modelButton = page.getByRole("button", { name: "Choose model" });
@@ -446,8 +468,11 @@ test("manages multiple API configurations and selects one per conversation", asy
 
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Edit deepseek-v4-flash" }).click();
-  await page.getByLabel("Model ID").fill("deepseek-v4-pro");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  const editDialog = page.getByRole("dialog", {
+    name: "Edit API configuration",
+  });
+  await editDialog.getByLabel("Model ID").fill("deepseek-v4-pro");
+  await editDialog.getByRole("button", { name: "Save changes" }).click();
   await page.getByRole("button", { name: "Delete claude-test-model" }).click();
   await page.getByRole("button", { name: "Delete claude-test-model" }).click();
   await expect(
