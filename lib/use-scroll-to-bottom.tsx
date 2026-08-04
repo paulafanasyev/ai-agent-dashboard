@@ -7,6 +7,7 @@ import { useEffect, useRef, type RefObject } from "react";
 
 const BOTTOM_THRESHOLD_PX = 120;
 
+/** Coalesces streaming DOM mutations into animation-frame scroll updates. */
 export function useScrollToBottom(): [
   RefObject<HTMLDivElement | null>,
   RefObject<HTMLDivElement | null>,

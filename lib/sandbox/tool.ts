@@ -17,6 +17,7 @@ function toAnthropicToolResult(result: ComputerActionResult) {
     : [{ type: "text" as const, text: result.text }];
 }
 
+/** Binds shared computer execution to Anthropic's native computer-use schema and result format. */
 export const computerTool = (sandboxId: string) =>
   anthropicProvider.tools.computer_20250124({
     displayWidthPx: resolution.x,
@@ -26,6 +27,7 @@ export const computerTool = (sandboxId: string) =>
     experimental_toToolResultContent: toAnthropicToolResult,
   });
 
+/** Binds shared shell execution to Anthropic's native Bash tool contract. */
 export const bashTool = (sandboxId?: string) =>
   anthropicProvider.tools.bash_20250124({
     execute: ({ command }) => executeBashCommand(sandboxId, command),

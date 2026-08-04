@@ -20,6 +20,7 @@ const suggestions = [
   },
 ];
 
+/** Fills the composer with a discoverable task while leaving final submission to the user. */
 export const PromptSuggestions = ({
   onSelectPrompt,
   disabled,

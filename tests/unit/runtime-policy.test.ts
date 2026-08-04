@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/runtime-policy.test.ts
+ * Purpose: Verify local Project Claude and hosted BYOK access rules.
+ * Problem solved: Prevents deployment changes from exposing shared model credentials to public users.
+ */
+
 import { describe, expect, it } from "vitest";
 import { resolveModelCapabilities } from "@/lib/ai/runtime-policy";
 

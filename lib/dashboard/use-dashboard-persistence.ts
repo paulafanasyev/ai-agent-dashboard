@@ -1,6 +1,7 @@
 /**
  * File: lib/dashboard/use-dashboard-persistence.ts
  * Purpose: Hydrate and persist dashboard sessions, active selection, and model settings.
+ * Problem solved: Restores browser-local work safely while keeping BYOK credentials scoped to the current tab.
  */
 "use client";
 
@@ -20,6 +21,7 @@ import {
 } from "@/lib/dashboard/session-storage";
 import type { ChatSession } from "@/lib/dashboard/types";
 
+/** Hydrates browser state once, then persists Sessions during idle time and BYOK per tab. */
 export function useDashboardPersistence() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);

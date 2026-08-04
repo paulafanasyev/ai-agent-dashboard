@@ -18,6 +18,7 @@ interface InputProps {
   stop: () => void;
 }
 
+/** Keeps the composer actionable for immediate runs, queued follow-ups, stop, or API configuration. */
 export const Input = ({
   input,
   inputRef,

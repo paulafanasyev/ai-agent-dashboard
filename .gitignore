@@ -20,6 +20,11 @@
 /playwright-report
 /test-results
 
+# local presentation notes
+/docs/five-minute-demo-script.en.md
+/docs/project-origin-and-walkthrough.zh-CN.md
+/docs/repo-wiki.zh-CN.md
+
 # next.js
 /.next/
 /out/

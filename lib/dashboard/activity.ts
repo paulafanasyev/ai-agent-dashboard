@@ -32,6 +32,7 @@ function truncate(value: string, maxLength = 72) {
     : normalized;
 }
 
+/** Classifies an event as visible Desktop work, background work, or runtime lifecycle activity. */
 export function eventSurface(event: AgentEvent) {
   if (event.kind === "runtime") return "Desktop runtime";
   return event.kind === "bash"
@@ -39,6 +40,7 @@ export function eventSurface(event: AgentEvent) {
     : "Visible desktop action";
 }
 
+/** Produces the shared user-facing activity description used across Chat, VNC, and Inspector. */
 export function describeAgentEvent(event: AgentEvent) {
   if (event.kind === "runtime") {
     return {

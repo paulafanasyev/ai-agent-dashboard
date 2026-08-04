@@ -41,6 +41,7 @@ const NOVNC_STATUS_BRIDGE = `(() => {
   report();
 })();`;
 
+/** Retries transient Vercel control-plane lookup failures without allocating a duplicate runtime. */
 async function getSandboxWithRetry(sandboxId: string) {
   let lastError: unknown;
   for (const delayMs of SANDBOX_LOOKUP_RETRY_DELAYS) {
@@ -56,6 +57,7 @@ async function getSandboxWithRetry(sandboxId: string) {
   throw lastError;
 }
 
+/** Injects a tiny noVNC bridge that reports viewer state to the parent Dashboard via postMessage. */
 async function installNoVNCStatusBridge(sandbox: Sandbox) {
   const encodedBridge = Buffer.from(NOVNC_STATUS_BRIDGE).toString("base64");
   const script = `
@@ -81,6 +83,7 @@ if marker not in html:
   }
 }
 
+/** Refreshes the supervised startup script so older snapshots receive current runtime fixes. */
 async function installDesktopStartupScript(sandbox: Sandbox) {
   await sandbox.writeFiles([
     {
@@ -101,6 +104,10 @@ async function installDesktopStartupScript(sandbox: Sandbox) {
   }
 }
 
+/**
+ * Reuses a healthy running Sandbox when possible; otherwise creates and boots one from the snapshot.
+ * A failed existing runtime is stopped before replacement to avoid returning a stale VNC route.
+ */
 export const getDesktop = async (id?: string) => {
   try {
     if (id) {
@@ -166,6 +173,7 @@ lib.XCloseDisplay(d)`,
   }
 };
 
+/** Waits until both local Xvnc and noVNC HTTP probes pass inside the Sandbox. */
 async function waitForNoVNC(sandbox: Sandbox, maxRetries = 20) {
   for (let i = 0; i < maxRetries; i++) {
     if (await areDesktopServicesHealthy(sandbox)) return;
@@ -174,6 +182,7 @@ async function waitForNoVNC(sandbox: Sandbox, maxRetries = 20) {
   throw new Error("noVNC health check timed out");
 }
 
+/** Probes Xvnc port 5900 and noVNC HTTP port 6080 from inside the runtime. */
 async function areDesktopServicesHealthy(sandbox: Sandbox) {
   try {
     const result = await sandbox.runCommand({
@@ -195,6 +204,7 @@ with urllib.request.urlopen("http://127.0.0.1:${NOVNC_PORT}", timeout=2) as resp
   }
 }
 
+/** Retries the external WebSocket/RFB handshake because public port routing may lag local startup. */
 async function waitForExternalRfb(baseUrl: string) {
   let lastDetail = "The external WebSocket route is not ready.";
   for (const delayMs of EXTERNAL_RFB_RETRY_DELAYS) {
@@ -273,6 +283,7 @@ function parseServiceProbe(value: string): ServiceProbe | null {
   return null;
 }
 
+/** Returns a serializable, credential-free breakdown of every Desktop connection layer. */
 export const diagnoseDesktop = async (
   sandboxId?: string,
 ): Promise<VncServerDiagnostics> => {
@@ -420,6 +431,7 @@ print(json.dumps(result))`;
   }
 };
 
+/** Requires a running Sandbox, healthy local services, and a working external RFB handshake. */
 export const checkDesktopHealth = async (id: string) => {
   try {
     const sandbox = await getSandboxWithRetry(id);
@@ -435,6 +447,7 @@ export const checkDesktopHealth = async (id: string) => {
   }
 };
 
+/** Resolves a Desktop only when all health layers pass; tool calls use this as their final guard. */
 export const getReadyDesktop = async (id: string | undefined) => {
   if (!id) throw new Error("A desktop is required before running tools");
   const sandbox = await getSandboxWithRetry(id);
@@ -447,6 +460,7 @@ export const getReadyDesktop = async (id: string | undefined) => {
   return sandbox;
 };
 
+/** Allocates or reconnects a Desktop and returns only its browser-safe ID and noVNC URL. */
 export const getDesktopURL = async (id?: string) => {
   try {
     const sandbox = await getDesktop(id);
@@ -461,6 +475,7 @@ export const getDesktopURL = async (id?: string) => {
   }
 };
 
+/** Stops one explicitly identified Sandbox and releases its remote compute. */
 export const killDesktop = async (id: string) => {
   try {
     const sandbox = await getSandboxWithRetry(id);

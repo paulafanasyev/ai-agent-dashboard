@@ -1,6 +1,7 @@
 /**
  * File: components/settings/vnc-diagnostics-settings.tsx
  * Purpose: Explain and test the browser, Sandbox, VNC, and noVNC connection chain without exposing credentials.
+ * Problem solved: Turns intermittent remote-desktop failures into safe, actionable diagnostic results.
  */
 "use client";
 
@@ -84,6 +85,7 @@ function DiagnosticRow({
   );
 }
 
+/** Combines browser-observed state with an on-demand server probe without rendering secret values. */
 export function VncDiagnosticsSettings({
   client,
   reconnectDisabled,

@@ -21,6 +21,7 @@ interface CreateDesktopDialogProps {
   onCreate: (name: string) => void;
 }
 
+/** Validates a unique bounded Desktop name before creating any local or remote state. */
 export function CreateDesktopDialog({
   open,
   existingNames,
@@ -162,6 +163,7 @@ interface RenameDesktopDialogProps {
   onRename: (sessionId: string, name: string) => void;
 }
 
+/** Reuses Desktop naming constraints without modifying runtime identity. */
 export function RenameDesktopDialog({
   session,
   existingNames,
@@ -295,6 +297,7 @@ interface DeleteDesktopDialogProps {
   onConfirm: (sessionId: string) => void;
 }
 
+/** Requires explicit confirmation before remote shutdown and permanent local-history removal. */
 export function DeleteDesktopDialog({
   session,
   onCancel,
@@ -375,6 +378,7 @@ interface DesktopDialogStackProps {
   onRename: (sessionId: string, name: string) => void;
 }
 
+/** Centralizes modal ownership so only the requested Desktop mutation dialog is mounted. */
 export function DesktopDialogStack({
   sessions,
   createOpen,

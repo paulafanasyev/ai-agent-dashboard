@@ -1,11 +1,13 @@
 /**
  * File: lib/dashboard/use-desktop-layout.ts
  * Purpose: Project the responsive desktop breakpoint into React state.
+ * Problem solved: Lets the dashboard switch composition reliably when viewport media queries change.
  */
 "use client";
 
 import { useEffect, useState } from "react";
 
+/** Subscribes to the Dashboard breakpoint and keeps SSR/hydration behavior deterministic. */
 export function useDesktopLayout() {
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {

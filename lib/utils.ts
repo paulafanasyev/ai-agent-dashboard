@@ -13,6 +13,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export const ABORTED = "User aborted";
 
+/** Removes unsupported or oversized tool content before resending history to a provider. */
 export const prunedMessages = (messages: UIMessage[]): UIMessage[] => {
   if (messages.at(-1)?.role === "assistant") {
     return messages;

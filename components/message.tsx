@@ -373,6 +373,7 @@ function CopyTextButton({
   );
 }
 
+/** Memoizes completed messages while allowing the latest streaming message to update incrementally. */
 export const PreviewMessage = memo(
   PurePreviewMessage,
   (previous, next) => {

@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/rfb-probe.test.ts
+ * Purpose: Verify external noVNC WebSocket URL mapping and real RFB banner detection.
+ * Problem solved: Distinguishes a reachable HTTP page from a functioning VNC transport.
+ */
+
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";

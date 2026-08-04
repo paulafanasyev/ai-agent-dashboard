@@ -82,6 +82,10 @@ interface DashboardShellProps {
   mobileSettings: ReactNode;
 }
 
+/**
+ * Renders desktop or mobile composition from controller-owned props.
+ * This component intentionally contains no Sandbox SDK or persistence logic.
+ */
 export function DashboardShell(props: DashboardShellProps) {
   if (!props.isHydrated) {
     return (

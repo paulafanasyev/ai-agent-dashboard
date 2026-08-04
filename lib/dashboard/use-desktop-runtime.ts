@@ -9,6 +9,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { VncViewerState } from "@/components/dashboard/vnc-viewer";
 import {
+  clearConnectionController,
+  clearConnectionTimer,
+  connectionControllerFor,
+  type ConnectionController,
+} from "@/lib/dashboard/desktop-connection-controller";
+import {
   finishRuntimeEvent,
   startRuntimeEvent,
 } from "@/lib/dashboard/events";
@@ -19,8 +25,8 @@ import {
   VNC_OFFLINE_GRACE_MS,
   vncReconnectDelayMs,
 } from "@/lib/dashboard/vnc-connection";
+import { useDesktopHealth } from "@/lib/dashboard/use-desktop-health";
 import {
-  checkDesktopHealth,
   diagnoseDesktop,
   getDesktopURL,
 } from "@/lib/sandbox/utils";
@@ -32,24 +38,10 @@ interface DesktopRuntimeOptions {
   isHydrated: boolean;
 }
 
-interface ConnectionController {
-  retryAttempt: number;
-  retryTimer: number | null;
-  offlineTimer: number | null;
-  handshakeTimer: number | null;
-  pendingConnect: boolean;
-}
-
-function createConnectionController(): ConnectionController {
-  return {
-    retryAttempt: 0,
-    retryTimer: null,
-    offlineTimer: null,
-    handshakeTimer: null,
-    pendingConnect: false,
-  };
-}
-
+/**
+ * Coordinates client-side Sandbox connection state, stream URLs, viewer recovery, diagnostics,
+ * runtime events, and explicit cleanup while keeping all chat state outside the VNC subtree.
+ */
 export function useDesktopRuntime({
   sessions,
   setSessions,
@@ -76,6 +68,7 @@ export function useDesktopRuntime({
     [activeSessionId],
   );
 
+  /** Inserts or replaces one lifecycle event while bounding per-Desktop history to 200 entries. */
   const upsertRuntimeEvent = useCallback(
     (sessionId: string, runtimeEvent: RuntimeEvent) => {
       setSessions((previous) =>
@@ -101,11 +94,7 @@ export function useDesktopRuntime({
   );
 
   const controllerFor = useCallback((sessionId: string) => {
-    const existing = controllersRef.current.get(sessionId);
-    if (existing) return existing;
-    const controller = createConnectionController();
-    controllersRef.current.set(sessionId, controller);
-    return controller;
+    return connectionControllerFor(controllersRef.current, sessionId);
   }, []);
 
   const removeStreamUrl = useCallback((sessionId: string) => {
@@ -117,46 +106,31 @@ export function useDesktopRuntime({
     });
   }, []);
 
-  const clearControllerTimer = useCallback(
-    (
-      controller: ConnectionController,
-      timer: "retryTimer" | "offlineTimer" | "handshakeTimer",
-    ) => {
-      const timerId = controller[timer];
-      if (timerId !== null) window.clearTimeout(timerId);
-      controller[timer] = null;
-    },
-    [],
-  );
-
   useEffect(() => {
     const activeIds = new Set(sessions.map((session) => session.id));
     for (const [sessionId, controller] of controllersRef.current) {
       if (activeIds.has(sessionId)) continue;
-      clearControllerTimer(controller, "retryTimer");
-      clearControllerTimer(controller, "offlineTimer");
-      clearControllerTimer(controller, "handshakeTimer");
+      clearConnectionController(controller);
       controllersRef.current.delete(sessionId);
     }
-  }, [clearControllerTimer, sessions]);
+  }, [sessions]);
 
   useEffect(
     () => () => {
       for (const controller of controllersRef.current.values()) {
-        clearControllerTimer(controller, "retryTimer");
-        clearControllerTimer(controller, "offlineTimer");
-        clearControllerTimer(controller, "handshakeTimer");
+        clearConnectionController(controller);
       }
     },
-    [clearControllerTimer],
+    [],
   );
 
+  /** Schedules one reconnect with capped backoff; an immediate request replaces an existing timer. */
   const scheduleReconnect = useCallback(
     (sessionId: string, immediate = false) => {
       const controller = controllerFor(sessionId);
       if (controller.retryTimer !== null) {
         if (!immediate) return;
-        clearControllerTimer(controller, "retryTimer");
+        clearConnectionTimer(controller, "retryTimer");
       }
       const delayMs = immediate
         ? 0
@@ -177,9 +151,13 @@ export function useDesktopRuntime({
         connectDesktopRef.current(sessionId, true);
       }, delayMs);
     },
-    [clearControllerTimer, controllerFor, removeStreamUrl, setSessions],
+    [controllerFor, removeStreamUrl, setSessions],
   );
 
+  /**
+   * Serializes Desktop allocation/reconnection, publishes the stream URL, and starts a separate
+   * viewer-handshake timeout. Busy requests collapse into one pending reconnect.
+   */
   const connectDesktop = useCallback(
     async (sessionId: string, queueIfBusy = false) => {
       const controller = controllerFor(sessionId);
@@ -191,9 +169,7 @@ export function useDesktopRuntime({
         return;
       }
       if (!queueIfBusy && controller.retryTimer !== null) return;
-      clearControllerTimer(controller, "retryTimer");
-      clearControllerTimer(controller, "offlineTimer");
-      clearControllerTimer(controller, "handshakeTimer");
+      clearConnectionController(controller);
       const session = sessionsRef.current.find((item) => item.id === sessionId);
       if (!session) return;
 
@@ -304,7 +280,6 @@ export function useDesktopRuntime({
       }
     },
     [
-      clearControllerTimer,
       controllerFor,
       removeStreamUrl,
       scheduleReconnect,
@@ -317,6 +292,7 @@ export function useDesktopRuntime({
     connectDesktopRef.current = connectDesktop;
   }, [connectDesktop]);
 
+  /** Keeps a disconnected iframe mounted during the grace period before replacing its stream URL. */
   const scheduleViewerRecovery = useCallback(
     (sessionId: string) => {
       const controller = controllerFor(sessionId);
@@ -333,123 +309,20 @@ export function useDesktopRuntime({
     [controllerFor, removeStreamUrl, scheduleReconnect],
   );
 
-  const verifyDesktop = useCallback(
-    async (sessionId: string, showChecking: boolean) => {
-      if (
-        connectingRef.current.has(sessionId) ||
-        verifyingRef.current.has(sessionId)
-      ) {
-        return;
-      }
-      const session = sessionsRef.current.find((item) => item.id === sessionId);
-      if (!session?.sandboxId) return;
-      const controller = controllerFor(sessionId);
-      const sandboxId = session.sandboxId;
-      const runtimeEvent = startRuntimeEvent(
-        sessionId,
-        "sandbox_health_check",
-        {
-          sandboxId,
-          source: showChecking ? "user" : "system",
-          message: "Checking Sandbox processes and the noVNC endpoint.",
-        },
-      );
-      upsertRuntimeEvent(sessionId, runtimeEvent);
-      verifyingRef.current.add(sessionId);
-
-      if (showChecking) {
-        setSessions((previous) =>
-          previous.map((item) =>
-            item.id === sessionId && item.sandboxId === sandboxId
-              ? { ...item, connectionStatus: "checking" }
-              : item,
-          ),
-        );
-      }
-
-      try {
-        const isHealthy = await checkDesktopHealth(sandboxId);
-        upsertRuntimeEvent(
-          sessionId,
-          finishRuntimeEvent(runtimeEvent, isHealthy ? "completed" : "error", {
-            message: isHealthy
-              ? "Sandbox and noVNC health checks passed."
-              : "The desktop runtime did not pass its health checks.",
-          }),
-        );
-        const viewerIsConfirmed =
-          activeSessionIdRef.current !== sessionId ||
-          viewerReadyRef.current.has(sessionId);
-        setSessions((previous) =>
-          previous.map((item) =>
-            item.id === sessionId && item.sandboxId === sandboxId
-              ? {
-                  ...item,
-                  connectionStatus: isHealthy
-                    ? viewerIsConfirmed
-                      ? "ready"
-                      : item.connectionStatus === "reconnecting"
-                        ? "reconnecting"
-                        : "checking"
-                    : "offline",
-                }
-              : item,
-          ),
-        );
-        if (!isHealthy) {
-          if (
-            activeSessionIdRef.current === sessionId &&
-            !streamUrlsRef.current[sessionId]
-          ) {
-            scheduleReconnect(sessionId);
-          } else if (activeSessionIdRef.current !== sessionId) {
-            removeStreamUrl(sessionId);
-          }
-        }
-      } catch (error) {
-        upsertRuntimeEvent(
-          sessionId,
-          finishRuntimeEvent(runtimeEvent, "error", {
-            message:
-              error instanceof Error
-                ? error.message
-                : "Desktop health check failed.",
-          }),
-        );
-        setSessions((previous) =>
-          previous.map((item) =>
-            item.id === sessionId && item.sandboxId === sandboxId
-              ? { ...item, connectionStatus: "offline" }
-              : item,
-          ),
-        );
-        if (
-          activeSessionIdRef.current === sessionId &&
-          !streamUrlsRef.current[sessionId]
-        ) {
-          scheduleReconnect(sessionId);
-        } else if (activeSessionIdRef.current !== sessionId) {
-          removeStreamUrl(sessionId);
-        }
-      } finally {
-        verifyingRef.current.delete(sessionId);
-        if (
-          controller.pendingConnect &&
-          !connectingRef.current.has(sessionId)
-        ) {
-          controller.pendingConnect = false;
-          scheduleReconnect(sessionId, true);
-        }
-      }
-    },
-    [
-      controllerFor,
-      removeStreamUrl,
-      scheduleReconnect,
-      setSessions,
-      upsertRuntimeEvent,
-    ],
-  );
+  const verifyDesktop = useDesktopHealth({
+    isHydrated,
+    sessionsRef,
+    streamUrlsRef,
+    activeSessionIdRef,
+    connectingRef,
+    verifyingRef,
+    viewerReadyRef,
+    controllerFor,
+    scheduleReconnect,
+    removeStreamUrl,
+    setSessions,
+    upsertRuntimeEvent,
+  });
 
   useEffect(() => {
     if (!isHydrated || process.env.NEXT_PUBLIC_E2E_MODE === "true") return;
@@ -470,45 +343,19 @@ export function useDesktopRuntime({
   }, [activeSessionId, connectDesktop, isHydrated, sessions, streamUrls]);
 
   useEffect(() => {
-    if (!isHydrated || process.env.NEXT_PUBLIC_E2E_MODE === "true") return;
-    const verifyKnownDesktops = () => {
-      for (const session of sessionsRef.current) {
-        if (
-          !session.sandboxId ||
-          session.connectionStatus === "creating" ||
-          connectingRef.current.has(session.id)
-        ) continue;
-        void verifyDesktop(session.id, false);
-      }
-    };
-    const verifyWhenVisible = () => {
-      if (document.visibilityState === "visible") verifyKnownDesktops();
-    };
-    const interval = window.setInterval(verifyKnownDesktops, 15_000);
-    window.addEventListener("focus", verifyKnownDesktops);
-    document.addEventListener("visibilitychange", verifyWhenVisible);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", verifyKnownDesktops);
-      document.removeEventListener("visibilitychange", verifyWhenVisible);
-    };
-  }, [isHydrated, verifyDesktop]);
-
-  useEffect(() => {
     const persistBeforePageExit = () => persistSessions(sessionsRef.current);
     window.addEventListener("pagehide", persistBeforePageExit);
     return () => window.removeEventListener("pagehide", persistBeforePageExit);
   }, []);
 
+  /** Resets retry state and forces a fresh connection attempt for the active Desktop only. */
   const refreshActiveDesktop = useCallback(() => {
     if (!activeSessionIdRef.current) return;
     const sessionId = activeSessionIdRef.current;
     const controller = controllerFor(sessionId);
     controller.retryAttempt = 0;
     controller.pendingConnect = false;
-    clearControllerTimer(controller, "retryTimer");
-    clearControllerTimer(controller, "offlineTimer");
-    clearControllerTimer(controller, "handshakeTimer");
+    clearConnectionController(controller);
     viewerReadyRef.current.delete(sessionId);
     removeStreamUrl(sessionId);
     setSessions((previous) =>
@@ -520,13 +367,13 @@ export function useDesktopRuntime({
     );
     void connectDesktop(sessionId, true);
   }, [
-    clearControllerTimer,
     connectDesktop,
     controllerFor,
     removeStreamUrl,
     setSessions,
   ]);
 
+  /** Runs credential-free server diagnostics against the active Sandbox, if one exists. */
   const runActiveDesktopDiagnostics = useCallback(async () => {
     const session = sessionsRef.current.find(
       (item) => item.id === activeSessionIdRef.current,
@@ -534,6 +381,7 @@ export function useDesktopRuntime({
     return diagnoseDesktop(session?.sandboxId ?? undefined);
   }, []);
 
+  /** Requests remote shutdown and records the result without blocking later local cleanup forever. */
   const destroyDesktop = useCallback(
     async (sessionId: string, sandboxId: string) => {
       const runtimeEvent = startRuntimeEvent(sessionId, "sandbox_destroy", {
@@ -567,14 +415,16 @@ export function useDesktopRuntime({
     [upsertRuntimeEvent],
   );
 
+  /**
+   * Reconciles noVNC iframe state with the connection controller. Ready cancels recovery timers;
+   * offline/reconnecting retains the iframe briefly and records viewer lifecycle events.
+   */
   const handleViewerStateChange = useCallback(
     (sessionId: string, state: VncViewerState) => {
       if (sessionId !== activeSessionIdRef.current) return;
       const controller = controllerFor(sessionId);
       if (state === "ready") {
-        clearControllerTimer(controller, "retryTimer");
-        clearControllerTimer(controller, "offlineTimer");
-        clearControllerTimer(controller, "handshakeTimer");
+        clearConnectionController(controller);
         controller.retryAttempt = 0;
         viewerReadyRef.current.add(sessionId);
         const pending = viewerEventRef.current.get(sessionId);
@@ -655,7 +505,6 @@ export function useDesktopRuntime({
       );
     },
     [
-      clearControllerTimer,
       controllerFor,
       scheduleViewerRecovery,
       setSessions,

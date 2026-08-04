@@ -21,6 +21,7 @@ import {
   WEBSOCKIFY_VERSION,
 } from "@/lib/sandbox/snapshot-runtime";
 
+/** Runs one snapshot-build command and fails immediately with its captured stderr on error. */
 async function run(
   sandbox: Sandbox,
   description: string,
@@ -39,6 +40,7 @@ async function run(
   return result;
 }
 
+/** Builds and publishes the reusable desktop image consumed by runtime Sandbox allocation. */
 async function createSnapshot() {
   console.log("Creating sandbox...");
   const sandbox = await Sandbox.create({

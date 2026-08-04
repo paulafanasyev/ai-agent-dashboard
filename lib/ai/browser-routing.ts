@@ -41,6 +41,10 @@ function currentUserText(messages: UIMessage[]) {
     .join(" ");
 }
 
+/**
+ * Returns true when the newest user turn requires observable browser work.
+ * The API uses this decision only for the first step, then restores automatic tool selection.
+ */
 export function shouldStartWithVisibleComputer(messages: UIMessage[]) {
   const text = currentUserText(messages);
   return text ? visibleBrowserIntent.test(text) : false;

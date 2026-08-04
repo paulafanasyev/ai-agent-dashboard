@@ -60,6 +60,7 @@ const exposeToolImagesToModel: LanguageModelV1Middleware = {
   },
 };
 
+/** Builds a compatible provider model with screenshot-result middleware for visual tool use. */
 export function createOpenAICompatibleModel({
   apiKey,
   baseUrl,
@@ -86,6 +87,7 @@ export function createOpenAICompatibleModel({
   });
 }
 
+/** Applies the fixed Kimi coding endpoint while reusing the generic compatible-model adapter. */
 export function createKimiModel(apiKey: string, modelId: string) {
   return createOpenAICompatibleModel({
     apiKey,

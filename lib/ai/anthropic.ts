@@ -16,6 +16,7 @@ export const anthropicProvider = createAnthropic({
 export const anthropicModelId =
   process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL_ID;
 
+/** Creates an isolated Anthropic client from a visitor key without mutating the project provider. */
 export function createAnthropicByokModel(apiKey: string, modelId: string) {
   return createAnthropic({ apiKey })(modelId);
 }

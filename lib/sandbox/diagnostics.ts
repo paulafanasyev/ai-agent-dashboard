@@ -1,6 +1,7 @@
 /**
  * File: lib/sandbox/diagnostics.ts
  * Purpose: Define the serializable, non-sensitive VNC diagnostics contract.
+ * Problem solved: Shares actionable connection results with the browser without exposing infrastructure secrets.
  */
 import type { ConnectionStatus } from "@/lib/dashboard/types";
 

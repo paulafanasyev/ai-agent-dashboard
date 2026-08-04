@@ -159,4 +159,5 @@ function ConversationSwitcherComponent({
   );
 }
 
+/** Keeps the accessible Conversation listbox stable during token-level message updates. */
 export const ConversationSwitcher = memo(ConversationSwitcherComponent);

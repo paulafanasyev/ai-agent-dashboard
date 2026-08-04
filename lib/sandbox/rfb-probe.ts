@@ -13,6 +13,7 @@ export interface RfbProbeResult {
   detail: string;
 }
 
+/** Maps an exposed noVNC page URL to the public websockify WebSocket endpoint. */
 export function externalRfbWebSocketUrl(baseUrl: string) {
   const url = new URL("/websockify", baseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -25,10 +26,12 @@ function rawDataText(data: RawData) {
   return Buffer.from(data).toString("ascii");
 }
 
+/** Accepts only an RFB version banner, proving the route reached a VNC backend rather than HTTP. */
 export function isRfbProtocolBanner(value: string) {
   return RFB_BANNER.test(value);
 }
 
+/** Opens a real external WebSocket and resolves only after receiving a valid RFB banner. */
 export async function probeExternalRfb(
   baseUrl: string,
   timeoutMs = 5_000,

@@ -1,3 +1,9 @@
+/**
+ * File: tests/unit/events.test.ts
+ * Purpose: Verify tool and runtime event projection, timing, identity, and chronological merging.
+ * Problem solved: Protects the typed observability pipeline from lifecycle regressions.
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import {
   eventCounts,

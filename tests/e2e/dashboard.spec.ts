@@ -1,3 +1,9 @@
+/**
+ * File: tests/e2e/dashboard.spec.ts
+ * Purpose: Exercise critical Dashboard flows in desktop and mobile Chromium.
+ * Problem solved: Catches user-visible regressions in onboarding, settings, sessions, diagnostics, and hosted BYOK.
+ */
+
 import { expect, test } from "@playwright/test";
 
 const tutorialKey = "agent-desk-tutorial-v1-complete";
