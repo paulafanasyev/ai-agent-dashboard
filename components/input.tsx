@@ -14,6 +14,7 @@ interface InputProps {
   isLoading: boolean;
   hasQueuedPrompts: boolean;
   modelConfigured: boolean;
+  onConfigureApiKey: () => void;
   stop: () => void;
 }
 
@@ -25,6 +26,7 @@ export const Input = ({
   isLoading,
   hasQueuedPrompts,
   modelConfigured,
+  onConfigureApiKey,
   stop,
 }: InputProps) => {
   const willQueue = isInitializing || isLoading || hasQueuedPrompts;
@@ -32,23 +34,30 @@ export const Input = ({
 
   return (
     <div className="relative w-full">
-      <ShadcnInput
-        ref={inputRef}
-        className="h-11 w-full rounded-xl border-transparent bg-zinc-100 py-3 pl-4 pr-12 text-sm shadow-none transition-colors focus-visible:border-zinc-300 focus-visible:bg-surface"
-        value={input}
-        autoFocus
-        disabled={!modelConfigured}
-        placeholder={
-          !modelConfigured
-            ? "Configure BYOK in Settings first..."
-            : isInitializing
+      {!modelConfigured ? (
+        <button
+          type="button"
+          onClick={onConfigureApiKey}
+          className="flex h-11 w-full items-center rounded-xl border border-transparent bg-zinc-100 px-4 text-left text-sm text-zinc-500 shadow-none transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 focus-visible:ring-2 focus-visible:ring-violet-400"
+        >
+          Configure API key
+        </button>
+      ) : (
+        <ShadcnInput
+          ref={inputRef}
+          className="h-11 w-full rounded-xl border-transparent bg-zinc-100 py-3 pl-4 pr-12 text-sm shadow-none transition-colors focus-visible:border-zinc-300 focus-visible:bg-surface"
+          value={input}
+          autoFocus
+          placeholder={
+            isInitializing
             ? "Queue a task while Desktop starts..."
             : isLoading
               ? "Add a follow-up..."
               : "Give the agent a task..."
-        }
-        onChange={handleInputChange}
-      />
+          }
+          onChange={handleInputChange}
+        />
+      )}
       {showStop ? (
         <button
           type="button"
@@ -80,7 +89,6 @@ export const Input = ({
           type="submit"
           disabled={!modelConfigured || !input.trim()}
           aria-label={willQueue ? "Queue task" : "Send task"}
-          title={willQueue ? "Add to queue" : "Send task"}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:bg-zinc-300"
         >
           <ArrowUp className="h-4 w-4" />

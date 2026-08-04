@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ThemeSettings } from "@/components/theme-switcher";
 import { DataSettings } from "@/components/settings/data-settings";
 import { VncDiagnosticsSettings } from "@/components/settings/vnc-diagnostics-settings";
@@ -44,6 +44,7 @@ import type {
   VncClientDiagnostics,
   VncServerDiagnostics,
 } from "@/lib/sandbox/diagnostics";
+import { OPEN_API_SETTINGS_EVENT } from "@/lib/dashboard/settings-events";
 import { cn } from "@/lib/utils";
 
 interface DashboardSettingsProps {
@@ -221,7 +222,7 @@ export function DashboardSettings({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isOpen]);
 
-  const open = () => {
+  const open = useCallback(() => {
     setAccessMode(
       config.provider === "anthropic" && projectClaudeAvailable
         ? "project"
@@ -246,7 +247,14 @@ export function DashboardSettings({
     setSaveState("saved");
     setActiveSection("api");
     setIsOpen(true);
-  };
+  }, [config, projectClaudeAvailable]);
+
+  useEffect(() => {
+    const openApiConfiguration = () => open();
+    window.addEventListener(OPEN_API_SETTINGS_EVENT, openApiConfiguration);
+    return () =>
+      window.removeEventListener(OPEN_API_SETTINGS_EVENT, openApiConfiguration);
+  }, [open]);
 
   const isByok = accessMode === "byok";
   const apiControlsDisabled = modelDisabled;
@@ -258,7 +266,6 @@ export function DashboardSettings({
         type="button"
         onClick={open}
         aria-label="Open settings"
-        title="Settings"
         className={cn(
           "flex items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus-visible:ring-2 focus-visible:ring-violet-400",
           trigger === "rail"
@@ -394,18 +401,7 @@ export function DashboardSettings({
                       value={accessMode}
                       onChange={(value) => setAccessMode(value as AccessMode)}
                     />
-                  ) : (
-                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-3">
-                      <p className="text-[11px] font-semibold text-violet-300">
-                        BYOK deployment
-                      </p>
-                      <p className="mt-1 text-[10px] leading-4 text-zinc-500">
-                        Hosted builds never use a shared project Claude key.
-                        Choose a provider and use your own credentials for this
-                        browser tab.
-                      </p>
-                    </div>
-                  )}
+                  ) : null}
 
                   {isByok ? (
                     <>

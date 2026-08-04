@@ -1,12 +1,11 @@
 /**
  * File: app/layout.tsx
- * Purpose: Configure the root document, metadata, fonts, analytics, global tooltips, and notifications.
+ * Purpose: Configure the root document, metadata, fonts, analytics, and notifications.
  * Problem solved: Gives every route a consistent, discoverable application shell and document-level configuration.
  */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ButtonTooltipProvider } from "@/components/button-tooltip-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -42,7 +41,6 @@ export default function RootLayout({
       >
         <ThemeProvider>
           {children}
-          <ButtonTooltipProvider />
           <Toaster />
           <Analytics />
         </ThemeProvider>

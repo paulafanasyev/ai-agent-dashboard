@@ -215,7 +215,6 @@ function SessionSidebarComponent({
           onClick={onCreate}
           disabled={disabled}
           aria-label="New desktop"
-          title="New desktop"
           className="flex h-8 w-full items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="size-3.5" />

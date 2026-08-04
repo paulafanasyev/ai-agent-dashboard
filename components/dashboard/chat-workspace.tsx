@@ -36,6 +36,7 @@ import type {
   RuntimeEvent,
   ToolEvent,
 } from "@/lib/dashboard/types";
+import { openApiSettings } from "@/lib/dashboard/settings-events";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
 import { ABORTED } from "@/lib/utils";
 import { AgentActivity } from "./agent-activity";
@@ -170,6 +171,16 @@ function ChatWorkspaceComponent({
     [events, runtimeEvents],
   );
   const isLoading = status === "submitted" || status === "streaming";
+
+  const requestApiConfiguration = useCallback(() => {
+    toast.info("API key required", {
+      description: "Choose a provider and add its API key before running a task.",
+      action: {
+        label: "Configure",
+        onClick: openApiSettings,
+      },
+    });
+  }, []);
 
   const replaceQueue = useCallback(
     (nextQueue: QueuedPrompt[]) => {
@@ -456,6 +467,7 @@ function ChatWorkspaceComponent({
             isLoading={isLoading}
             hasQueuedPrompts={queuedPrompts.length > 0}
             modelConfigured={modelConfigured}
+            onConfigureApiKey={requestApiConfiguration}
             stop={stop}
           />
         </form>

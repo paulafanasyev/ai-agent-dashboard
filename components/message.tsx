@@ -361,7 +361,6 @@ function CopyTextButton({
       type="button"
       onClick={onClick}
       aria-label={copied ? "Message copied" : "Copy message"}
-      title={copied ? "Copied" : "Copy message"}
       className={cn(
         "mt-0.5 flex h-7 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 text-[9px] font-medium text-zinc-500 opacity-70 transition-[opacity,color,background-color,border-color] hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400 sm:opacity-0 sm:group-hover/copy:opacity-100",
         copied &&

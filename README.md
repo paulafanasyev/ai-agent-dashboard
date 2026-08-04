@@ -33,17 +33,16 @@ are implemented on `main`.
 - Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a selectable debug timeline.
 - Unified instrumentation for Sandbox and noVNC lifecycle events, including ID, timestamp, status, and duration.
 - Copy controls on user and agent text with inline confirmation and toast feedback.
-- Global hover and keyboard-focus tooltips that explain every button from its accessible name or visible label.
 - Visible-first browser automation plus a live VNC activity overlay that distinguishes desktop actions from background commands.
 - Multiple desktop sessions, each with reusable VNC state and switchable local conversation history.
 - Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
-- Named desktop creation plus persistent pinning, renaming, drag ordering, hover details, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
+- Named desktop creation plus persistent pinning, renaming, drag ordering, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
 - Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
 - Server-backed VNC Diagnostics in Settings checks deployment authentication, snapshot presence, Sandbox reachability, ports 5900/6080, and the external stream route without exposing credential values.
 - Transient Vercel Sandbox lookup failures are retried, while unrecoverable startup errors remain synchronized across the desktop viewer and activity feedback.
 - Persistent per-conversation FIFO task queues: prompts entered before Desktop readiness or during an active run execute automatically when safe.
 - Frame-coalesced scrolling and dragging, throttled live-state projection, idle-time persistence, lazy screenshot decoding, and a memoized VNC viewer isolated from token-by-token chat rendering.
-- Five persistent, neutral-dark interface themes with researched Vercel, Vue, Codex, Xcode, and GitHub accent and text palettes, plus live preview in Settings.
+- Four persistent, neutral-dark interface themes with researched Vercel, Vue, Xcode, and GitHub accent and text palettes, plus live preview in Settings.
 - Remote desktop environment running in a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) with Chrome, a window manager, and VNC streaming.
 - [shadcn/ui](https://ui.shadcn.com/) components for a modern, responsive UI powered by [Tailwind CSS](https://tailwindcss.com).
 - Built with the latest [Next.js](https://nextjs.org) App Router.

@@ -12,7 +12,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme="dark"
       className="toaster group"
+      closeButton
       toastOptions={{
+        closeButtonAriaLabel: "Dismiss notification",
         classNames: {
           toast:
             "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
@@ -21,6 +23,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground font-medium",
           cancelButton:
             "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground font-medium",
+          closeButton:
+            "group-[.toast]:border-border group-[.toast]:bg-background group-[.toast]:text-muted-foreground group-[.toast]:hover:bg-muted group-[.toast]:hover:text-foreground",
         },
       }}
       {...props}
