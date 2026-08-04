@@ -6,8 +6,8 @@
 "use client";
 
 import {
-
   CircleHelp,
+  Database,
   Eye,
   EyeOff,
   KeyRound,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ThemeSettings } from "@/components/theme-switcher";
+import { DataSettings } from "@/components/settings/data-settings";
 import {
   SaveStatus,
   SettingsChoice,
@@ -44,11 +45,12 @@ interface DashboardSettingsProps {
   trigger: "rail" | "icon";
   onConfigChange: (config: ClientModelConfig) => void;
   onReplayTutorial: () => void;
+  onClearAllData: () => Promise<void>;
 }
 
 type AccessMode = "project" | "byok";
 type ByokProvider = "kimi" | "custom";
-type SettingsSection = "api" | "appearance" | "tutorial";
+type SettingsSection = "api" | "appearance" | "tutorial" | "data";
 
 function sameConfig(left: ClientModelConfig, right: ClientModelConfig) {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -60,6 +62,7 @@ export function DashboardSettings({
   trigger,
   onConfigChange,
   onReplayTutorial,
+  onClearAllData,
 }: DashboardSettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [accessMode, setAccessMode] = useState<AccessMode>(
@@ -249,7 +252,7 @@ export function DashboardSettings({
                 </p>
                 <nav
                   aria-label="Settings sections"
-                  className="grid grid-cols-3 gap-1 md:flex md:flex-col"
+                  className="grid grid-cols-4 gap-1 md:flex md:flex-col"
                 >
                   <SettingsNavItem
                     icon={<KeyRound className="size-4" />}
@@ -274,6 +277,14 @@ export function DashboardSettings({
                     description="Replay the product tour"
                     active={activeSection === "tutorial"}
                     onClick={() => setActiveSection("tutorial")}
+                  />
+                  <SettingsNavItem
+                    icon={<Database className="size-4" />}
+                    label="Data and storage"
+                    compactLabel="Data"
+                    description="Clear browser data"
+                    active={activeSection === "data"}
+                    onClick={() => setActiveSection("data")}
                   />
                 </nav>
               </aside>
@@ -469,7 +480,7 @@ export function DashboardSettings({
                     </div>
                     <ThemeSettings />
                   </section>
-                ) : (
+                ) : activeSection === "tutorial" ? (
                   <section
                     aria-labelledby="tutorial-settings-title"
                     className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-7"
@@ -519,6 +530,14 @@ export function DashboardSettings({
                       </div>
                     </div>
                   </section>
+                ) : (
+                  <DataSettings
+                    disabled={modelDisabled}
+                    onClearAllData={async () => {
+                      await onClearAllData();
+                      setIsOpen(false);
+                    }}
+                  />
                 )}
               </div>
             </div>

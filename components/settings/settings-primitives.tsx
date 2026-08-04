@@ -28,6 +28,7 @@ export function SettingsNavItem({
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors",

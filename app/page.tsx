@@ -48,6 +48,7 @@ export default function DashboardPage() {
     modelConfig,
     setModelConfig,
     isHydrated,
+    clearLocalDashboardData,
   } = useDashboardPersistence();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus>("idle");
@@ -468,6 +469,36 @@ export default function DashboardPage() {
     [modelConfig],
   );
 
+  const clearAllData = useCallback(async () => {
+    if (agentStatus !== "idle") {
+      toast.info("Stop the active run before clearing cached data.");
+      return;
+    }
+
+    const currentSessions = [...sessionsRef.current];
+    await Promise.all(
+      currentSessions.map(async (session) => {
+        if (session.sandboxId) {
+          await destroyDesktop(session.id, session.sandboxId);
+        }
+        removeStreamUrl(session.id);
+      }),
+    );
+
+    viewerReadyRef.current.clear();
+    clearLocalDashboardData();
+    setSelectedEventId(null);
+    setAgentStatus("idle");
+    setVncDisplayMode("embedded");
+    toast.success("All sessions, chats, and cached settings were deleted");
+  }, [
+    agentStatus,
+    clearLocalDashboardData,
+    destroyDesktop,
+    removeStreamUrl,
+    viewerReadyRef,
+  ]);
+
 
   const activeEvents = useMemo(
     () =>
@@ -507,9 +538,16 @@ export default function DashboardPage() {
         trigger="rail"
         onConfigChange={updateModelConfig}
         onReplayTutorial={replayTutorial}
+        onClearAllData={clearAllData}
       />
     ),
-    [agentStatus, modelConfig, replayTutorial, updateModelConfig],
+    [
+      agentStatus,
+      clearAllData,
+      modelConfig,
+      replayTutorial,
+      updateModelConfig,
+    ],
   );
 
   const dialogs = (
@@ -542,6 +580,7 @@ export default function DashboardPage() {
       trigger="icon"
       onConfigChange={updateModelConfig}
       onReplayTutorial={replayTutorial}
+      onClearAllData={clearAllData}
     />
   );
 

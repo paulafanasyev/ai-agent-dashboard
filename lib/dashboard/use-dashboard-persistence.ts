@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_MODEL_CONFIG,
   MODEL_SETTINGS_STORAGE_KEY,
@@ -29,6 +29,7 @@ export function useDashboardPersistence() {
   const [isHydrated, setIsHydrated] = useState(false);
   const sessionsRef = useRef(sessions);
   const activeSessionIdRef = useRef(activeSessionId);
+  const skipNextSessionPersistenceRef = useRef(false);
 
   useEffect(() => void (sessionsRef.current = sessions), [sessions]);
   useEffect(
@@ -68,6 +69,10 @@ export function useDashboardPersistence() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    if (skipNextSessionPersistenceRef.current) {
+      skipNextSessionPersistenceRef.current = false;
+      return;
+    }
     let idleCallback: number | null = null;
     const timeout = window.setTimeout(() => {
       if ("requestIdleCallback" in window) {
@@ -96,6 +101,17 @@ export function useDashboardPersistence() {
     }
   }, [activeSessionId, isHydrated]);
 
+  const clearLocalDashboardData = useCallback(() => {
+    skipNextSessionPersistenceRef.current = true;
+    localStorage.clear();
+    sessionStorage.clear();
+    sessionsRef.current = [];
+    activeSessionIdRef.current = null;
+    setSessions([]);
+    setActiveSessionId(null);
+    setModelConfig(DEFAULT_MODEL_CONFIG);
+  }, []);
+
   return {
     sessions,
     setSessions,
@@ -106,5 +122,6 @@ export function useDashboardPersistence() {
     modelConfig,
     setModelConfig,
     isHydrated,
+    clearLocalDashboardData,
   };
 }

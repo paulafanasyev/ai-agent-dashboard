@@ -38,3 +38,46 @@ test("creates a named desktop without a live Sandbox dependency", async ({ page 
     .click();
   await expect(page.getByText("QA desktop", { exact: true }).first()).toBeVisible();
 });
+
+test("clears all sessions only after the exact confirmation phrase", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.goto("/");
+  await page.getByRole("button", { name: "New desktop" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Create desktop" });
+  await createDialog.getByLabel("Desktop name").fill("Delete me");
+  await createDialog
+    .getByRole("button", { name: "Create desktop", exact: true })
+    .click();
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: /Data and storage/ }).click();
+  await page.getByRole("button", { name: "Clear all data" }).click();
+
+  const confirmation = page.getByRole("alertdialog", {
+    name: "Delete all sessions and chats?",
+  });
+  const deleteButton = confirmation.getByRole("button", {
+    name: "Delete everything",
+  });
+  await expect(deleteButton).toBeDisabled();
+  await confirmation
+    .getByLabel(/Type Delete all sessions and chats/)
+    .fill("Delete all sessions and chat");
+  await expect(deleteButton).toBeDisabled();
+  await confirmation
+    .getByLabel(/Type Delete all sessions and chats/)
+    .fill("Delete all sessions and chats");
+  await expect(deleteButton).toBeEnabled();
+  await deleteButton.click();
+
+  await expect(page.getByRole("heading", { name: "No desktops yet" })).toBeVisible();
+  await expect(page.getByText("Delete me", { exact: true })).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.length))
+    .toBe(0);
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.length))
+    .toBe(0);
+});
