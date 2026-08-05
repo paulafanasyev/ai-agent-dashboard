@@ -19,7 +19,10 @@ import {
   startRuntimeEvent,
 } from "@/lib/dashboard/events";
 import { persistSessions } from "@/lib/dashboard/session-storage";
-import { retainDesktopSessionIds } from "@/lib/dashboard/retained-session-pool";
+import {
+  retainDesktopSessionIds,
+  stabilizeRetainedDesktopSessionIds,
+} from "@/lib/dashboard/retained-session-pool";
 import type { ChatSession, RuntimeEvent } from "@/lib/dashboard/types";
 import {
   VNC_HANDSHAKE_TIMEOUT_MS,
@@ -54,6 +57,7 @@ export function useDesktopRuntime({
   const sessionsRef = useRef(sessions);
   const streamUrlsRef = useRef(streamUrls);
   const activeSessionIdRef = useRef(activeSessionId);
+  const retainedSessionMruRef = useRef<string[]>([]);
   const retainedSessionIdsRef = useRef<string[]>([]);
   const previousRetainedSessionIdsRef = useRef<string[]>([]);
   const connectingRef = useRef(new Set<string>());
@@ -73,11 +77,16 @@ export function useDesktopRuntime({
   );
 
   useEffect(() => {
+    const retainedMruIds = retainDesktopSessionIds(
+      retainedSessionMruRef.current,
+      activeSessionId,
+      sessions.map((session) => session.id),
+    );
+    retainedSessionMruRef.current = retainedMruIds;
     setRetainedSessionIds((previous) => {
-      const next = retainDesktopSessionIds(
+      const next = stabilizeRetainedDesktopSessionIds(
         previous,
-        activeSessionId,
-        sessions.map((session) => session.id),
+        retainedMruIds,
       );
       retainedSessionIdsRef.current = next;
       return next.length === previous.length &&

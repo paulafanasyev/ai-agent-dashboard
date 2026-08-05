@@ -225,7 +225,7 @@ export function useDashboardSessionActions({
     ],
   );
 
-  /** Switches Desktop ownership and re-verifies an attached stream before trusting its status. */
+  /** Switches Desktop ownership and re-verifies an attached stream without obscuring a live viewer. */
   const selectSession = useCallback(
     (sessionId: string) => {
       if (sessionId === activeSessionIdRef.current) return;
@@ -242,7 +242,7 @@ export function useDashboardSessionActions({
       setSelectedEventId(conversation?.events.at(-1)?.id ?? null);
       setAgentStatus("idle");
       if (session?.sandboxId && streamUrlsRef.current[sessionId]) {
-        void verifyDesktop(sessionId, true);
+        void verifyDesktop(sessionId, false);
       }
     },
     [

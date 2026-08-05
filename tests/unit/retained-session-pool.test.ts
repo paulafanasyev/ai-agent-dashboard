@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_RETAINED_DESKTOP_SESSIONS,
   retainDesktopSessionIds,
+  stabilizeRetainedDesktopSessionIds,
 } from "@/lib/dashboard/retained-session-pool";
 
 describe("retainDesktopSessionIds", () => {
@@ -41,5 +42,25 @@ describe("retainDesktopSessionIds", () => {
         ["one", "three"],
       ),
     ).toEqual(["three", "one"]);
+  });
+});
+
+describe("stabilizeRetainedDesktopSessionIds", () => {
+  it("preserves mounted viewer order while selection changes MRU order", () => {
+    expect(
+      stabilizeRetainedDesktopSessionIds(
+        ["one", "two", "three"],
+        ["one", "three", "two"],
+      ),
+    ).toEqual(["one", "two", "three"]);
+  });
+
+  it("removes evicted viewers and appends newly retained viewers", () => {
+    expect(
+      stabilizeRetainedDesktopSessionIds(
+        ["one", "two", "three"],
+        ["four", "one", "three"],
+      ),
+    ).toEqual(["one", "three", "four"]);
   });
 });
