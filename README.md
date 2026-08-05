@@ -25,16 +25,18 @@ are implemented on `main`.
 ## Features
 
 - Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
-- Local Project Claude or hosted BYOK through Anthropic, Kimi, and OpenAI-compatible providers, all with computer-use and bash tool capabilities.
-- One provider dropdown for browser-side BYOK; the key is kept in tab-scoped `sessionStorage`.
+- Local Project Claude or hosted BYOK through Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible providers, all with computer-use and bash tool capabilities.
+- Multiple tab-scoped API configurations with add, edit, delete, default selection, and a custom per-conversation model picker.
+- Configurable DeepSeek V4 Thinking mode: disabled by default for deterministic Desktop tool routing, or enabled with compatible automatic tool selection and reasoning replay.
 - Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
-- Mobile stacked workspace with the live VNC desktop above the always-available conversation composer and desktop switching at the top.
+- Mobile stacked workspace with the live VNC desktop above the always-available conversation composer; crossing the responsive breakpoint moves the same viewer without restarting VNC.
 - One-click VNC minimization and draggable, viewport-constrained picture-in-picture without recreating the remote desktop iframe.
 - Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a selectable debug timeline.
 - Unified instrumentation for Sandbox and noVNC lifecycle events, including ID, timestamp, status, and duration.
 - Copy controls on user and agent text with inline confirmation and toast feedback.
 - Visible-first browser automation plus a live VNC activity overlay that distinguishes desktop actions from background commands.
-- Multiple desktop sessions, each with reusable VNC state and switchable local conversation history.
+- Multiple sequentially named desktop sessions (`Desktop 1`, `Desktop 2`, …), each with reusable VNC state and switchable local conversation history.
+- Hover/focus Desktop details plus editable, deletable conversations whose active state is shown by row highlighting rather than a redundant checkmark.
 - Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
 - Named desktop creation plus persistent pinning, renaming, drag ordering, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
 - Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
@@ -73,7 +75,7 @@ The app spins up a Vercel Sandbox from a pre-built snapshot that includes:
 - **Google Chrome** — auto-launched so the AI agent has a browser ready
 - **xdotool + ImageMagick** — for mouse/keyboard control and screenshots
 
-When a user sends a message, the selected model uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. Web, weather, search, and other current-information requests are deterministically routed to `computer` for the first step, so the agent must inspect the visible browser instead of answering from memory or using a hidden HTTP command. Claude uses Anthropic's native computer-use tools; Kimi K3 uses provider-neutral function tools and receives screenshots as multimodal input.
+When a user sends a message, the selected model uses the `computer` tool (screenshot, click, type, scroll) and the `bash` tool (run shell commands) to interact with the sandbox desktop. Web, weather, search, and other current-information requests are deterministically routed to `computer` for the first step, so the agent must inspect the visible browser instead of answering from memory or using a hidden HTTP command. Claude uses Anthropic's native computer-use tools; Kimi, DeepSeek, and custom providers use provider-neutral function tools and receive screenshots as multimodal input. DeepSeek non-thinking mode keeps deterministic first-tool routing, while Thinking mode omits unsupported explicit `tool_choice` and preserves `reasoning_content` across tool turns.
 
 Tool invocations are normalized into discriminated event records that power the inline cards, debug timeline, metrics, and expanded inspector. Sandbox and noVNC lifecycle actions use the same event envelope while remaining session-owned rather than conversation-owned. The memoized noVNC viewer is displayed in a horizontally resizable panel and receives no chat-message props.
 
@@ -82,7 +84,7 @@ Each browser-local desktop session owns one sandbox ID and runtime generation, p
 ### Architecture
 
 ```
-Desktop session ──→ Conversations ──→ AI SDK ──→ Claude / Kimi K3
+Desktop session ──→ Conversations ──→ AI SDK ──→ Claude / Kimi / DeepSeek / Custom
      │                    │                            │
      │                    └─→ typed tool events ←─────┤
      ├── runtime events ───────────────┐               ↓
@@ -168,16 +170,20 @@ Open [http://localhost:3000](http://localhost:3000) to use the computer use agen
 
 ### Use BYOK
 
-Open **Settings** at the bottom-left of the desktop rail, select **BYOK**, then
-choose a provider from the single dropdown. Valid changes are saved
-automatically; there is no separate save action.
+Open **Settings** at the bottom-left of the desktop rail and select **API
+Configuration**. Saved configurations are shown first. Use **Add config** to
+open the credential dialog, or edit/delete an existing card. Set one profile as
+the default, then use the custom model menu in the conversation composer to
+choose a different profile for that conversation.
 
 - **Anthropic** uses the official Messages API and accepts a Claude model ID.
 - **Kimi** is a preset for `https://api.kimi.com/coding/v1`; its model ID defaults to `k3`.
+- **DeepSeek** uses `https://api.deepseek.com`, defaults to `deepseek-v4-flash`, and offers a Thinking mode switch. Thinking is off by default for the most reliable multi-step Desktop automation.
 - **OpenAI-compatible** accepts a public HTTPS Base URL and model ID.
 
-The key is stored only in the current tab's `sessionStorage`, sent to this app's
-`/api/chat` route for server-side forwarding, and removed when the tab is closed.
+Configuration names are always their model IDs. API keys and profiles are stored
+only in the current tab's `sessionStorage`, sent to this app's `/api/chat` route
+for server-side forwarding, and removed when the tab is closed.
 Only enter a personal key on a deployment whose source and operator you trust.
 
 ### Quality checks
@@ -196,9 +202,11 @@ pnpm test:e2e
 ```
 
 The browser suite covers first-open tutorial persistence, replay from Settings,
-named Desktop creation, phrase-confirmed cache deletion, and VNC diagnostics at
-desktop and mobile breakpoints. It also verifies the hosted BYOK-only provider
-dropdown and tab-scoped Anthropic key storage without a live Sandbox credential.
+sequential Desktop naming, conversation edit/delete controls, phrase-confirmed
+cache deletion, VNC diagnostics, and responsive viewer continuity at desktop and
+mobile breakpoints. It also verifies multi-profile API configuration, the custom
+conversation model picker, DeepSeek Thinking mode persistence, and tab-scoped
+credential storage without a live Sandbox credential.
 
 ## Environment Variables
 

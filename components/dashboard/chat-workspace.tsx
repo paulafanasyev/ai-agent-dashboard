@@ -157,13 +157,22 @@ function ChatWorkspaceComponent({
       }
       activePromptRef.current = null;
       const message = error.message.trim();
-      toast.error("Model request failed", {
-        description: message
-          ? message.slice(0, 240)
-          : "The model request ended without an error message. Retry this conversation once.",
+      const isDeepSeekToolChoiceConflict =
+        /thinking mode/i.test(message) && /tool_choice/i.test(message);
+      toast.error(
+        isDeepSeekToolChoiceConflict
+          ? "DeepSeek tool mode conflict"
+          : "Model request failed",
+        {
+          description: isDeepSeekToolChoiceConflict
+            ? "Thinking mode rejected forced tool selection. Retry the task; DeepSeek will now select the Desktop tool automatically."
+            : message
+              ? message.slice(0, 240)
+              : "The model request ended without an error message. Retry this conversation once.",
         richColors: true,
         position: "top-center",
-      });
+        },
+      );
     },
     onFinish: () => {
       activePromptRef.current = null;

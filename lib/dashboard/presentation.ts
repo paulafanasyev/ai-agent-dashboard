@@ -10,7 +10,7 @@ import type { ClientModelConfig } from "@/lib/ai/model-config";
 export function modelEndpointSignature(config: ClientModelConfig) {
   if (config.provider === "kimi") return `${config.provider}:${config.modelId}`;
   if (config.provider === "deepseek") {
-    return `${config.provider}:${config.modelId}`;
+    return `${config.provider}:${config.modelId}:${config.thinkingMode}`;
   }
   if (config.provider === "anthropic-byok") {
     return `${config.provider}:${config.modelId}`;

@@ -32,6 +32,7 @@ import {
   modelProviderLabel,
   type ApiConfigProfile,
   type ClientModelConfig,
+  type DeepSeekThinkingMode,
   type KimiReasoningEffort,
 } from "@/lib/ai/model-config";
 import { cn } from "@/lib/utils";
@@ -181,6 +182,9 @@ export function ApiSettings({
               </p>
               <p className="mt-1 text-[9px] text-zinc-500">
                 {modelProviderLabel(profile.config)}
+                {profile.config.provider === "deepseek"
+                  ? ` · Thinking ${profile.config.thinkingMode === "enabled" ? "on" : "off"}`
+                  : ""}
               </p>
 
               <div className="mt-3 flex items-center justify-end gap-1 border-t border-zinc-200/70 pt-3">
@@ -286,6 +290,10 @@ function ApiConfigEditorDialog({
     useState<KimiReasoningEffort>(
       config?.provider === "kimi" ? config.reasoningEffort : "high",
     );
+  const [deepSeekThinking, setDeepSeekThinking] =
+    useState<DeepSeekThinkingMode>(
+      config?.provider === "deepseek" ? config.thinkingMode : "disabled",
+    );
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -338,6 +346,14 @@ function ApiConfigEditorDialog({
         apiKey: trimmedKey,
         modelId: trimmedModel,
         reasoningEffort,
+      };
+    }
+    if (provider === "deepseek") {
+      return {
+        provider,
+        apiKey: trimmedKey,
+        modelId: trimmedModel,
+        thinkingMode: deepSeekThinking,
       };
     }
     return { provider, apiKey: trimmedKey, modelId: trimmedModel };
@@ -511,6 +527,59 @@ function ApiConfigEditorDialog({
                 </div>
               ) : null}
             </div>
+
+            {provider === "deepseek" ? (
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-medium text-zinc-800">
+                  Thinking mode
+                </legend>
+                <div
+                  role="radiogroup"
+                  aria-label="DeepSeek thinking mode"
+                  className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1"
+                >
+                  {(
+                    [
+                      ["disabled", "Off", "Reliable Desktop tools"],
+                      ["enabled", "On", "Deeper reasoning"],
+                    ] as const
+                  ).map(([value, title, description]) => {
+                    const selected = deepSeekThinking === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setDeepSeekThinking(value)}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-left transition-colors",
+                          selected
+                            ? "border-violet-400/50 bg-surface text-zinc-900 shadow-sm"
+                            : "border-transparent text-zinc-500 hover:text-zinc-800",
+                        )}
+                      >
+                        <span className="block text-[11px] font-semibold">
+                          {title}
+                          {value === "disabled" ? (
+                            <span className="ml-1.5 text-[8px] font-medium text-emerald-500">
+                              Recommended
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-0.5 block text-[9px]">
+                          {description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] leading-4 text-zinc-500">
+                  Thinking on uses automatic tool selection; off can force the
+                  first visible Desktop action and is more reliable for agent tasks.
+                </p>
+              </fieldset>
+            ) : null}
 
             {error ? <p className="text-xs text-amber-300">{error}</p> : null}
           </div>

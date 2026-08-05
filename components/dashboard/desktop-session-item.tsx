@@ -315,12 +315,6 @@ function DesktopDetailsTooltip({
   position: { left: number; top: number };
 }) {
   const conversationCount = session.conversations.length;
-  const updatedAt = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(session.updatedAt);
 
   return (
     <div
@@ -351,8 +345,6 @@ function DesktopDetailsTooltip({
         <dd className="font-medium text-zinc-700">
           {session.sandboxId ? "Allocated" : "Not allocated"}
         </dd>
-        <dt className="text-zinc-400">Updated</dt>
-        <dd className="font-medium text-zinc-700">{updatedAt}</dd>
       </dl>
     </div>
   );

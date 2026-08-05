@@ -84,9 +84,10 @@ test("shows desktop details when hovering its icon", async ({ page }, testInfo) 
   await page.getByRole("button", { name: "Switch to Desktop 1" }).hover();
   const tooltip = page.getByRole("tooltip", { name: "Desktop 1 details" });
   await expect(tooltip).toBeVisible();
-  await expect(tooltip.getByText("Not started", { exact: true })).toBeVisible();
+  await expect(tooltip.getByText("Status", { exact: true })).toBeVisible();
   await expect(tooltip.getByText("1", { exact: true })).toBeVisible();
   await expect(tooltip.getByText("Not allocated", { exact: true })).toBeVisible();
+  await expect(tooltip.getByText("Updated", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open settings" }).hover();
   await expect(tooltip).toHaveCount(0);
@@ -432,6 +433,9 @@ test("manages multiple API configurations and selects one per conversation", asy
   await expect(deepSeekDialog.getByLabel("Model ID")).toHaveValue(
     "deepseek-v4-flash",
   );
+  await expect(
+    deepSeekDialog.getByRole("radio", { name: /Off/ }),
+  ).toHaveAttribute("aria-checked", "true");
   await deepSeekDialog
     .getByRole("button", { name: "Add configuration" })
     .click();
@@ -472,7 +476,16 @@ test("manages multiple API configurations and selects one per conversation", asy
     name: "Edit API configuration",
   });
   await editDialog.getByLabel("Model ID").fill("deepseek-v4-pro");
+  await editDialog.getByRole("radio", { name: /On/ }).click();
   await editDialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("DeepSeek · Thinking on")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .toContain('"thinkingMode":"enabled"');
   await page.getByRole("button", { name: "Delete claude-test-model" }).click();
   await page.getByRole("button", { name: "Delete claude-test-model" }).click();
   await expect(

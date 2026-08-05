@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DEEPSEEK_MODEL_ID,
+  isDeepSeekModelConfig,
   parseStoredApiConfigState,
   parseStoredModelConfig,
 } from "@/lib/ai/model-config";
@@ -37,6 +38,7 @@ describe("API model configuration", () => {
             provider: "deepseek",
             apiKey: "sk-deepseek-test",
             modelId: "deepseek-v4-flash",
+            thinkingMode: "disabled",
           },
         },
       ],
@@ -102,5 +104,59 @@ describe("API model configuration", () => {
         modelId: "claude-legacy",
       }),
     ).toMatchObject({ provider: "anthropic-byok", modelId: "claude-legacy" });
+  });
+
+  it("migrates a legacy custom DeepSeek endpoint to the first-class provider", () => {
+    expect(
+      parseStoredModelConfig({
+        provider: "custom",
+        apiKey: "sk-deepseek-legacy",
+        baseUrl: "https://api.deepseek.com/v1",
+        modelId: "deepseek-v4-pro",
+      }),
+    ).toEqual({
+      provider: "deepseek",
+      apiKey: "sk-deepseek-legacy",
+      modelId: "deepseek-v4-pro",
+      thinkingMode: "disabled",
+    });
+  });
+
+  it("recognizes official DeepSeek configs without misclassifying other compatible APIs", () => {
+    expect(
+      isDeepSeekModelConfig({
+        provider: "deepseek",
+        apiKey: "sk-deepseek-test",
+        modelId: "deepseek-v4-flash",
+        thinkingMode: "disabled",
+      }),
+    ).toBe(true);
+    expect(
+      isDeepSeekModelConfig({
+        provider: "custom",
+        apiKey: "sk-deepseek-legacy",
+        baseUrl: "https://api.deepseek.com/v1",
+        modelId: "deepseek-v4-pro",
+      }),
+    ).toBe(true);
+    expect(
+      isDeepSeekModelConfig({
+        provider: "custom",
+        apiKey: "sk-compatible-test",
+        baseUrl: "https://api.example.com/v1",
+        modelId: "example-model",
+      }),
+    ).toBe(false);
+  });
+
+  it("preserves an explicitly enabled DeepSeek thinking mode", () => {
+    expect(
+      parseStoredModelConfig({
+        provider: "deepseek",
+        apiKey: "sk-deepseek-test",
+        modelId: "deepseek-v4-pro",
+        thinkingMode: "enabled",
+      }),
+    ).toMatchObject({ provider: "deepseek", thinkingMode: "enabled" });
   });
 });
