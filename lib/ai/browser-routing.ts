@@ -4,6 +4,10 @@
  * Problem solved: Prevents web and current-information tasks from being answered from model memory or hidden shell requests.
  */
 import type { UIMessage } from "ai";
+import {
+  deepSeekThinkingMode,
+  type ClientModelConfig,
+} from "./model-config";
 
 const visibleBrowserIntent = new RegExp(
   [
@@ -48,4 +52,19 @@ function currentUserText(messages: UIMessage[]) {
 export function shouldStartWithVisibleComputer(messages: UIMessage[]) {
   const text = currentUserText(messages);
   return text ? visibleBrowserIntent.test(text) : false;
+}
+
+/**
+ * Chooses the first-step tool policy without sending unsupported provider fields.
+ * DeepSeek Thinking mode must receive no tool_choice field, including "auto".
+ */
+export function initialToolChoice(
+  messages: UIMessage[],
+  modelConfig: ClientModelConfig,
+) {
+  if (deepSeekThinkingMode(modelConfig) === "enabled") return undefined;
+
+  return shouldStartWithVisibleComputer(messages)
+    ? ({ type: "tool", toolName: "computer" } as const)
+    : ("auto" as const);
 }

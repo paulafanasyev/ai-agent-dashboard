@@ -14,9 +14,10 @@ import {
   createKimiModel,
   createOpenAICompatibleModel,
 } from "@/lib/ai/kimi";
-import { shouldStartWithVisibleComputer } from "@/lib/ai/browser-routing";
+import { initialToolChoice } from "@/lib/ai/browser-routing";
 import {
   DEEPSEEK_BASE_URL,
+  deepSeekThinkingMode,
   isSafeCustomBaseUrl,
 } from "@/lib/ai/model-config";
 import { getServerModelCapabilities } from "@/lib/ai/runtime-policy";
@@ -48,6 +49,7 @@ const modelConfigSchema = z.discriminatedUnion("provider", [
     provider: z.literal("deepseek"),
     apiKey: z.string().trim().min(8).max(512),
     modelId: z.string().trim().min(1).max(200),
+    thinkingMode: z.enum(["disabled", "enabled"]).default("disabled"),
   }),
   z.object({
     provider: z.literal("custom"),
@@ -102,7 +104,7 @@ export async function POST(req: Request) {
     const usesGenericTools =
       modelConfig.provider !== "anthropic" &&
       modelConfig.provider !== "anthropic-byok";
-    const mustStartWithComputer = shouldStartWithVisibleComputer(messages);
+    const configuredDeepSeekThinking = deepSeekThinkingMode(modelConfig);
 
     const model =
       modelConfig.provider === "kimi"
@@ -113,6 +115,9 @@ export async function POST(req: Request) {
           ? createOpenAICompatibleModel({
               apiKey: modelConfig.apiKey,
               baseUrl: DEEPSEEK_BASE_URL,
+              extraBody: {
+                thinking: { type: modelConfig.thinkingMode },
+              },
               modelId: modelConfig.modelId,
               providerName: "deepseek",
             })
@@ -120,6 +125,11 @@ export async function POST(req: Request) {
           ? createOpenAICompatibleModel({
               apiKey: modelConfig.apiKey,
               baseUrl: modelConfig.baseUrl,
+              extraBody: configuredDeepSeekThinking
+                ? {
+                    thinking: { type: configuredDeepSeekThinking },
+                  }
+                : undefined,
               modelId: modelConfig.modelId,
               providerName: "custom",
             })
@@ -150,13 +160,13 @@ export async function POST(req: Request) {
         preserveLatestScreenshot: true,
       }),
       tools,
-      toolChoice: mustStartWithComputer
-        ? { type: "tool", toolName: "computer" }
-        : "auto",
+      // DeepSeek Thinking mode rejects the tool_choice field entirely. Keep tools
+      // available and rely on the browser-first system instruction for this provider.
+      toolChoice: initialToolChoice(messages, modelConfig),
       providerOptions: modelConfig.provider === "kimi"
         ? {
-            openai: {
-              reasoningEffort:
+            kimi: {
+              reasoning_effort:
                 messages.at(-1)?.role === "assistant" &&
                 /^k3(?:-|$)/i.test(modelConfig.modelId)
                   ? "none"

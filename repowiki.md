@@ -25,10 +25,11 @@ The repository extends the Vercel Labs AI SDK Computer Use starter with:
 - A collapsible event timeline and derived activity counters.
 - Browser-local desktop sessions with multiple conversations per desktop.
 - Memoized VNC rendering isolated from streaming chat updates.
-- Local Project Claude plus hosted BYOK for Anthropic, Kimi, and custom OpenAI-compatible models.
+- Local Project Claude plus multiple hosted BYOK profiles for Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible models.
+- Per-conversation model selection and configurable DeepSeek Thinking mode with tool-call reasoning replay.
 - Live, observable activity feedback while the agent is working.
 - Persistent FIFO follow-up queues scoped to individual conversations.
-- A persistent five-theme interface built on shared semantic design tokens.
+- A persistent four-theme interface built on shared semantic design tokens.
 
 ## 2. Current Runtime Status
 
@@ -42,8 +43,8 @@ Current implementation constraints:
 - Tool events are projected from AI SDK message parts on the client.
 - Tool duration is client-observed elapsed time, not server-instrumented time.
 - Computer targets are coordinate-based and do not include semantic DOM targets.
-- Sandbox lifecycle actions are not yet represented in the central event list.
 - The UI prevents conflicting session actions while an agent run is active.
+- DeepSeek Thinking mode cannot use explicit `tool_choice`; the route omits that field and relies on the visible-browser instruction while preserving reasoning across tool turns.
 
 These constraints are documented because they define the next architecture
 milestones and should not be mistaken for completed functionality.
@@ -57,7 +58,7 @@ milestones and should not be mistaken for completed functionality.
 | Styling | Tailwind CSS 4 + shadcn/ui primitives | Responsive layout and reusable controls |
 | Streaming AI | Vercel AI SDK 4 | Messages, streaming responses, multi-step tool calls |
 | Local project model | Anthropic Claude | Native computer-use and Bash tool invocation during local development |
-| BYOK models | Anthropic, Kimi, and OpenAI-compatible providers | Tab-scoped credentials and provider-appropriate tools |
+| BYOK models | Anthropic, Kimi, DeepSeek, and OpenAI-compatible providers | Multiple tab-scoped profiles and provider-appropriate tools |
 | Validation | Zod | API payload, persisted configuration, and tool input validation |
 | Desktop runtime | Vercel Sandbox | Ephemeral Linux compute and exposed noVNC port |
 | Desktop stack | Xvnc, openbox, noVNC, websockify | Virtual display, window management, and browser streaming |
@@ -84,7 +85,7 @@ flowchart LR
     Chat --> ChatRoute["POST /api/chat"]
     ChatRoute --> ModelRouter{"Model provider"}
     ModelRouter --> Claude["Project or BYOK Claude native tools"]
-    ModelRouter --> Compatible["Kimi or OpenAI-compatible tools"]
+    ModelRouter --> Compatible["Kimi / DeepSeek / compatible tools"]
     Claude --> Tools["Shared sandbox actions"]
     Compatible --> Tools
     Tools --> Sandbox["Vercel Sandbox"]
@@ -123,10 +124,14 @@ components/
     session-sidebar.tsx          Compact session navigation and contextual actions
     tool-inspector.tsx           Expanded event details
     vnc-viewer.tsx               Memoized noVNC iframe
+  settings/
+    api-settings.tsx             Saved API profile cards and add/edit dialog
+    data-settings.tsx            Confirmed local-data cleanup
+    vnc-diagnostics-settings.tsx Server-backed runtime diagnostics
   ui/                            Shared shadcn-style primitives
   input.tsx                      Chat composer
   message.tsx                    Messages and inline tool cards
-  model-settings.tsx             Auto-saving API and theme settings panel
+  model-settings.tsx             Unified Settings shell and section navigation
   project-info.tsx               Empty-state capability summary
   prompt-suggestions.tsx         Example agent tasks
   theme-provider.tsx             Theme persistence and document integration
@@ -144,6 +149,8 @@ lib/
     session-storage.ts           Versioned browser persistence and redaction
     types.ts                     Event and session contracts
     use-dashboard-persistence.ts Session hydration and persistence
+    use-dashboard-model-config.ts API profile CRUD and per-conversation selection
+    use-dashboard-session-actions.ts Desktop and conversation mutations
     use-dashboard-tutorial.ts    First-open tutorial state
     use-desktop-layout.ts        Responsive breakpoint projection
     use-desktop-runtime.ts       Sandbox/noVNC lifecycle orchestration
@@ -200,14 +207,16 @@ or conversation data. On wide screens the Settings body places API configuration
 on the left and Appearance on the right; smaller screens collapse to one
 scrollable column.
 
-`model-settings.tsx` owns the bottom-left Settings trigger and the unified
-dialog. Local development can select Project Claude; hosted builds show one
-BYOK provider dropdown for Anthropic, Kimi, or OpenAI-compatible endpoints.
-Valid BYOK drafts are applied automatically after a short input debounce, while
-provider and theme choices require no save button. Invalid or incomplete BYOK
-drafts remain local to the dialog and do not replace the last valid model
-configuration. API fields are locked during an active agent run, but theme
-selection remains available.
+`model-settings.tsx` owns the bottom-left Settings trigger and unified dialog;
+`components/settings/api-settings.tsx` owns the API profile list and focused
+add/edit dialog. Local development can include Project Claude, while hosted
+builds use user-created Anthropic, Kimi, DeepSeek, or custom compatible profiles.
+Each saved configuration is named by its model ID, can be edited or deleted, and
+one can be marked as the default. The custom model listbox beside the composer
+selects a profile per conversation without exposing a native browser select.
+Invalid drafts remain inside the editor and never replace a saved profile. API
+fields are locked during an active agent run, but theme selection remains
+available.
 
 ### Responsive composition
 
@@ -218,7 +227,9 @@ selection remains available.
   reconnect, and creation controls sit above the VNC surface. The inspector is
   omitted from the primary phone layout so chat input remains continuously
   available.
-- **VNC:** the same viewer instance contract is used in both layouts.
+- **VNC:** the viewer is mounted once above the responsive layout branches.
+  Crossing between horizontal and stacked layouts repositions the same React
+  subtree and iframe, so resizing the window does not restart noVNC.
 
 ### VNC display modes
 
@@ -290,8 +301,11 @@ selects a new conversation normally.
 `conversation-switcher.tsx` renders the conversation picker as a custom listbox
 instead of a native select. It keeps titles and message or queue metadata visible,
 marks the active conversation, closes on outside click or Escape, and supports
-arrow-key navigation. Switching is disabled while the current agent run is active
-so the stream cannot be detached from its owning conversation.
+arrow-key navigation. Hovering or focusing a row reveals edit and delete actions;
+the current conversation uses row highlighting without a separate checkmark.
+Rename validates non-empty titles, and deletion requires confirmation while
+preserving at least one conversation. Switching and mutations are disabled while
+the current agent run is active so the stream cannot be detached from its owner.
 
 Switching conversations remounts only the chat workspace and restores that
 conversation's inspector selection. The VNC viewer continues receiving the same
@@ -300,16 +314,18 @@ stable desktop props.
 ### Desktop creation, pinning, renaming, ordering, and deletion
 
 Creating a desktop opens a naming dialog before any session or sandbox work
-starts. The field defaults to `Desktop 123`, enforces a 40-character limit, and
-rejects case-insensitive duplicate names. Confirming creation appends and selects
-the new session; the existing readiness pipeline then allocates its runtime.
+starts. Default names are sequential (`Desktop 1`, `Desktop 2`, …) based on the
+next available number, while custom names remain supported. The field enforces a
+40-character limit and rejects case-insensitive duplicates. Confirming creation
+appends and selects the new session; the readiness pipeline then allocates its runtime.
 
 The desktop rail starts in a compact icon-first layout and can be resized between
 84 and 240 pixels from its right edge. Its width is persisted in browser storage.
 At wider sizes, rows reveal their desktop names between the square desktop icon
 and the three-dot action trigger. Hovering or focusing the desktop icon opens a
 portal-rendered detail card with the desktop name, live connection state,
-conversation count, and pin state. The three-dot menu provides pin or unpin,
+conversation count, runtime allocation, and pin state; volatile update timestamps
+are intentionally omitted. The three-dot menu provides pin or unpin,
 edit, and delete actions without changing the rail width. Pin state is stored on
 `ChatSession`; pinning moves the desktop into the leading pinned group while
 preserving the relative order of the other sessions. Pinned rows receive a
@@ -393,7 +409,7 @@ It does not claim to expose hidden chain-of-thought.
 
 ## 9. Model Routing and BYOK
 
-The model configuration is a discriminated union with four variants:
+The model configuration is a discriminated union with five variants:
 
 ```ts
 type ClientModelConfig =
@@ -408,6 +424,12 @@ type ClientModelConfig =
       apiKey: string;
       modelId: string;
       reasoningEffort: "low" | "high" | "max";
+    }
+  | {
+      provider: "deepseek";
+      apiKey: string;
+      modelId: string;
+      thinkingMode: "disabled" | "enabled";
     }
   | {
       provider: "custom";
@@ -438,8 +460,22 @@ type ClientModelConfig =
 - Defaults to model ID `k3`, which remains editable in the UI.
 - Accepts a Kimi Code membership API key stored only in the current browser tab.
 - Uses generic AI SDK function tools instead of Anthropic-native schemas.
-- Applies the selected reasoning effort through OpenAI provider options.
+- Applies the selected reasoning effort through compatible-provider options.
 - Sends `temperature: 1`, which is required by the K3 API.
+
+### DeepSeek preset
+
+- Uses the official `https://api.deepseek.com` endpoint and defaults to
+  `deepseek-v4-flash`.
+- Defaults Thinking mode to `disabled`, allowing visible browser intents to force
+  `computer` as the first tool.
+- When Thinking is enabled, omits `tool_choice` entirely because DeepSeek rejects
+  that field in this mode.
+- Injects the selected `thinking.type` into the real provider request body.
+- Uses `@ai-sdk/openai-compatible` reasoning events plus middleware metadata to
+  replay `reasoning_content` on subsequent tool-call turns, as required by DeepSeek.
+- Migrates legacy custom profiles targeting the official DeepSeek origin into the
+  first-class provider with Thinking disabled.
 
 ### Custom path
 
@@ -495,8 +531,10 @@ headless automation, or Bash-based web requests.
 This policy has two enforcement layers. `lib/ai/browser-routing.ts` recognizes
 web, weather, forecast, search, latest-information, and equivalent Chinese
 intents when the newest message is from the user. `/api/chat` then forces the
-first model step to call `computer`; later tool-result turns return to automatic
-tool selection. The system instruction separately requires screenshots and
+first model step to call `computer` for providers that support explicit tool
+selection; DeepSeek Thinking mode omits `tool_choice` and follows the same policy
+through its system instruction. Later tool-result turns return to automatic tool
+selection. The system instruction separately requires screenshots and
 visible Chrome navigation. This makes the canonical "What's the weather in
 Dubai?" demo observable without forcing every later step into another tool call.
 
@@ -620,7 +658,6 @@ debug panel, and expanded tool inspector.
 - `pending` currently covers the observable pre-result phase; initiated and
   executing are not represented separately.
 - `durationMs` measures time between client observations.
-- Sandbox create, reconnect, and stop operations are not event variants yet.
 - Browser targets report coordinates rather than semantic elements.
 
 ## 13. Persistence and Data Safety
@@ -636,7 +673,9 @@ storage. This avoids exceeding browser storage quotas with base64 image data.
 
 ### BYOK credentials
 
-- Keys are stored in `sessionStorage`, not `localStorage`.
+- API profiles and keys are stored in `sessionStorage`, not `localStorage`.
+- Profiles support create, edit, delete, and default selection; conversations
+  persist only the selected profile ID, never credentials.
 - Closing the tab clears browser-held model configuration.
 - Keys are sent to this application's `/api/chat` route for forwarding.
 - Keys are never copied into session history or rendered in the event inspector.
@@ -662,7 +701,7 @@ enforce outbound network policy and DNS-level protections.
 | Debug panel | `debug-panel.tsx` | Event store timeline and action counts |
 | Remote desktop | `vnc-viewer.tsx` | noVNC connection and reconnect status |
 | Tool inspector | `tool-inspector.tsx` | Full screenshot, command output, action details, JSON copy |
-| Unified settings | `model-settings.tsx` | Local Project Claude, hosted BYOK dropdown, VNC diagnostics, data, tutorial, and themes |
+| Unified settings | `model-settings.tsx` + `settings/api-settings.tsx` | Saved API profiles, DeepSeek Thinking, VNC diagnostics, data, tutorial, and themes |
 
 ## 15. API Surface
 
@@ -675,7 +714,7 @@ Request fields:
 | `messages` | AI SDK UI message history |
 | `sandboxId` | Active remote desktop identifier |
 | `desktopReady` | Literal readiness assertion from the connected dashboard viewer |
-| `modelConfig` | Discriminated project Claude, Anthropic BYOK, Kimi, or custom configuration |
+| `modelConfig` | Discriminated Project Claude, Anthropic BYOK, Kimi, DeepSeek, or custom configuration |
 
 The route validates the body and rechecks Sandbox, Xvnc, and noVNC health before
 creating the model or allowing a tool call. An unavailable desktop returns HTTP
@@ -770,10 +809,14 @@ Current automated coverage includes:
 - Event lifecycle and ordering tests.
 - Session serialization and runtime-event persistence tests.
 - First-open tutorial persistence and Settings replay in Chromium.
-- Named Desktop creation at desktop and mobile breakpoints.
+- Sequential Desktop creation plus conversation edit/delete behavior.
+- Multi-profile API CRUD, per-conversation model selection, and DeepSeek Thinking persistence.
+- DeepSeek request-body injection, provider-aware `tool_choice`, and
+  `reasoning_content` replay after a tool call.
+- Responsive viewer identity and Desktop details at desktop and mobile breakpoints.
 
-Future coverage should add model configuration validation, a VNC render-count
-regression, live Claude/Kimi tool-call flows, and Sandbox failure recovery.
+Future coverage should add live-provider contract tests, deeper VNC render-count
+instrumentation, and Sandbox failure recovery.
 
 ## 19. Environment Configuration
 

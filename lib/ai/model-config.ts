@@ -11,6 +11,7 @@ export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 export const PROJECT_CLAUDE_CONFIG_ID = "project-claude";
 
 export type KimiReasoningEffort = "low" | "high" | "max";
+export type DeepSeekThinkingMode = "disabled" | "enabled";
 
 export type ClientModelConfig =
   | {
@@ -31,6 +32,7 @@ export type ClientModelConfig =
       provider: "deepseek";
       apiKey: string;
       modelId: string;
+      thinkingMode: DeepSeekThinkingMode;
     }
   | {
       provider: "custom";
@@ -76,6 +78,13 @@ export function isKimiReasoningEffort(
   return value === "low" || value === "high" || value === "max";
 }
 
+/** Narrows stored values to the two thinking modes accepted by DeepSeek V4. */
+export function isDeepSeekThinkingMode(
+  value: string,
+): value is DeepSeekThinkingMode {
+  return value === "disabled" || value === "enabled";
+}
+
 /**
  * Accepts only public HTTPS provider endpoints and rejects obvious loopback/private targets.
  * This is a validation layer, not a replacement for deployment-level outbound network policy.
@@ -117,6 +126,24 @@ export function isSafeCustomBaseUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+/** Detects both first-class and legacy custom profiles that target DeepSeek's official API. */
+export function isDeepSeekModelConfig(config: ClientModelConfig) {
+  if (config.provider === "deepseek") return true;
+  if (config.provider !== "custom") return false;
+
+  try {
+    return new URL(config.baseUrl).origin === new URL(DEEPSEEK_BASE_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves DeepSeek request mode, treating legacy compatible profiles as non-thinking. */
+export function deepSeekThinkingMode(config: ClientModelConfig) {
+  if (config.provider === "deepseek") return config.thinkingMode;
+  return isDeepSeekModelConfig(config) ? ("disabled" as const) : null;
 }
 
 /** Produces a credential-free provider/model label safe for rendering in Settings. */
@@ -189,6 +216,11 @@ export function parseStoredModelConfig(
       provider: "deepseek",
       apiKey: candidate.apiKey,
       modelId: candidate.modelId.trim(),
+      thinkingMode:
+        typeof candidate.thinkingMode === "string" &&
+        isDeepSeekThinkingMode(candidate.thinkingMode)
+          ? candidate.thinkingMode
+          : "disabled",
     };
   }
 
@@ -200,12 +232,25 @@ export function parseStoredModelConfig(
     typeof candidate.modelId === "string" &&
     candidate.modelId.trim().length > 0
   ) {
-    return {
+    const customConfig: Extract<ClientModelConfig, { provider: "custom" }> = {
       provider: "custom",
       apiKey: candidate.apiKey,
-      baseUrl: candidate.baseUrl,
-      modelId: candidate.modelId,
+      baseUrl: candidate.baseUrl.trim(),
+      modelId: candidate.modelId.trim(),
     };
+
+    // DeepSeek used to be configured through the generic compatible-provider form.
+    // Normalize those profiles so provider-specific request compatibility applies.
+    if (isDeepSeekModelConfig(customConfig)) {
+      return {
+        provider: "deepseek",
+        apiKey: customConfig.apiKey,
+        modelId: customConfig.modelId,
+        thinkingMode: "disabled",
+      };
+    }
+
+    return customConfig;
   }
 
   return null;
