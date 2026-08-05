@@ -191,6 +191,14 @@ test("keeps the three most recent Desktop viewers mounted while switching", asyn
   await page.getByRole("button", { name: "Switch to Desktop 2" }).click();
   await page.getByRole("button", { name: "Switch to Desktop 3" }).click();
   await expect(page.locator("[data-retained-desktop]")).toHaveCount(3);
+  const mountedOrder = async () =>
+    page.locator("[data-retained-desktop]").evaluateAll((viewers) =>
+      viewers.map((viewer) => viewer.getAttribute("data-retained-desktop")),
+    );
+  const orderBeforeReselect = await mountedOrder();
+
+  await page.getByRole("button", { name: "Switch to Desktop 2" }).click();
+  expect(await mountedOrder()).toEqual(orderBeforeReselect);
   await expect(retainedViewer("desktop-1")).toHaveAttribute(
     "data-retention-sentinel",
     "same-node",

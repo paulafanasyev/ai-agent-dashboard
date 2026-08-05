@@ -33,3 +33,24 @@ export function retainDesktopSessionIds(
     ...retainedIds.filter((sessionId) => sessionId !== activeSessionId),
   ].slice(0, limit);
 }
+
+/**
+ * Keeps retained viewer DOM nodes in their existing order while applying MRU membership changes.
+ * Moving a connected iframe in the DOM reloads its browsing context in Chromium, so MRU order must
+ * never be used directly as React render order.
+ */
+export function stabilizeRetainedDesktopSessionIds(
+  previousRenderedIds: readonly string[],
+  retainedMruIds: readonly string[],
+): string[] {
+  const retainedIds = new Set(retainedMruIds);
+  const renderedIds = previousRenderedIds.filter((sessionId) =>
+    retainedIds.has(sessionId),
+  );
+  const renderedIdSet = new Set(renderedIds);
+
+  return [
+    ...renderedIds,
+    ...retainedMruIds.filter((sessionId) => !renderedIdSet.has(sessionId)),
+  ];
+}
