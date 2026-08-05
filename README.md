@@ -24,31 +24,15 @@ are implemented on `main`.
 
 ## Features
 
-- Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
-- Local Project Claude or hosted BYOK through Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible providers, all with computer-use and bash tool capabilities.
-- Multiple tab-scoped API configurations with add, edit, delete, list-order fallback, editable Base URLs for every BYOK provider, and a custom per-conversation model picker.
-- Configurable DeepSeek V4 Thinking mode: disabled by default for reliable Desktop automation, or enabled with compatible automatic tool selection and reasoning replay.
-- Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
-- Mobile stacked workspace with the live VNC desktop above the always-available conversation composer; crossing the responsive breakpoint moves the same viewer without restarting VNC.
-- One-click VNC minimization and draggable, viewport-constrained picture-in-picture without recreating the remote desktop iframe.
-- Typed event projection with action counts, `idle / thinking / executing` status, inline tool cards, and a selectable debug timeline.
-- Unified instrumentation for Sandbox and noVNC lifecycle events, including ID, timestamp, status, and duration.
-- Copy controls on user and agent text with inline confirmation and toast feedback.
-- Visible-first browser automation plus a live VNC activity overlay that distinguishes desktop actions from background commands.
-- Multiple sequentially named desktop sessions (`Desktop 1`, `Desktop 2`, …), with an LRU pool that keeps the three most recently used noVNC viewers mounted while switching.
-- Hover/focus Desktop details plus editable, deletable conversations whose active state is shown by row highlighting rather than a redundant checkmark.
-- Idempotent conversation creation that focuses the composer instead of accumulating empty conversations.
-- Named desktop creation plus persistent pinning, renaming, drag ordering, a width-adjustable desktop rail, and confirmation-protected deletion down to a true empty state.
-- Live desktop health states backed by Sandbox, Xvnc, noVNC, and viewer-handshake checks; `Ready` is never restored from browser storage.
-- Server-backed VNC Diagnostics in Settings checks deployment authentication, snapshot presence, Sandbox reachability, ports 5900/6080, and a real external WebSocket/RFB handshake without exposing credential values.
-- A per-desktop connection controller serializes health checks and reconnects, preserves the iframe through brief disconnects, and retries with capped exponential backoff.
-- Desktop sandboxes run for up to 30 minutes, while a startup script refreshed on allocation supervises Xvnc, openbox, websockify, and Chrome; pinned noVNC/websockify releases make rebuilt snapshots reproducible.
-- Persistent per-conversation FIFO task queues: prompts entered before Desktop readiness or during an active run execute automatically when safe.
-- Frame-coalesced scrolling and dragging, throttled live-state projection, idle-time persistence, lazy screenshot decoding, and a memoized VNC viewer isolated from token-by-token chat rendering.
-- Four persistent, neutral-dark interface themes with researched Vercel, Vue, Xcode, and GitHub accent and text palettes, plus live preview in Settings.
-- Remote desktop environment running in a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) with Chrome, a window manager, and VNC streaming.
-- [shadcn/ui](https://ui.shadcn.com/) components for a modern, responsive UI powered by [Tailwind CSS](https://tailwindcss.com).
-- Built with the latest [Next.js](https://nextjs.org) App Router.
+- Production-style two-panel workspace with chat, inline tool visualizations, a collapsible event timeline, a live VNC desktop, and an expanded action inspector.
+- Isolated Vercel Sandbox desktops with Chrome, noVNC streaming, computer-use actions, Bash execution, screenshots, and command output.
+- Typed, observable event pipeline with action payloads, lifecycle status, duration, aggregate counts, and derived agent state.
+- Multiple persistent Desktop sessions and conversations with creation, switching, renaming, pinning, ordering, and protected deletion.
+- Stable VNC lifecycle that preserves recent desktop connections across session switches, chat streaming, and responsive layout changes.
+- Per-conversation FIFO prompt queues that safely serialize agent work while a Desktop is starting or another task is running.
+- BYOK support for Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible providers, including editable Base URLs and per-conversation model selection.
+- Runtime diagnostics and recovery covering Sandbox health, VNC readiness, WebSocket handshakes, serialized reconnects, and capped retry backoff.
+- Responsive desktop, tablet, and mobile layouts with resizable panels, VNC minimization, and picture-in-picture mode.
 
 ## Upstream Baseline
 
