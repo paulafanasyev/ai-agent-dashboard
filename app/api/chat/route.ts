@@ -14,7 +14,7 @@ import {
   createKimiModel,
   createOpenAICompatibleModel,
 } from "@/lib/ai/kimi";
-import { initialToolChoice } from "@/lib/ai/browser-routing";
+import { repairCompatibleToolCall } from "@/lib/ai/tool-call-repair";
 import {
   DEEPSEEK_BASE_URL,
   deepSeekThinkingMode,
@@ -92,7 +92,11 @@ export async function POST(req: Request) {
         },
       );
     }
-    if (!(await checkDesktopHealth(sandboxId))) {
+    // The browser already proves the external noVNC/RFB route before it marks the
+    // Desktop Ready. A second external RFB client here can contend with that retained
+    // viewer and produce a false 409, so tool dispatch only rechecks the Sandbox-local
+    // VNC and noVNC services.
+    if (!(await checkDesktopHealth(sandboxId, false))) {
       return new Response(
         JSON.stringify({ error: "Desktop is not ready. The task remains queued." }),
         {
@@ -120,6 +124,7 @@ export async function POST(req: Request) {
               },
               modelId: modelConfig.modelId,
               providerName: "deepseek",
+              supportsVision: false,
             })
         : modelConfig.provider === "custom"
           ? createOpenAICompatibleModel({
@@ -132,12 +137,15 @@ export async function POST(req: Request) {
                 : undefined,
               modelId: modelConfig.modelId,
               providerName: "custom",
+              supportsVision: !configuredDeepSeekThinking,
             })
           : anthropicProvider(anthropicModelId);
 
     const tools: ToolSet = usesGenericTools
       ? {
-          computer: genericComputerTool(sandboxId),
+          computer: genericComputerTool(sandboxId, {
+            includeScreenText: configuredDeepSeekThinking !== null,
+          }),
           bash: genericBashTool(sandboxId),
         }
       : {
@@ -147,11 +155,13 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model,
+      maxSteps: 30,
       temperature: modelConfig.provider === "kimi" ? 1 : undefined,
       system:
         "You are a helpful assistant operating an observable remote desktop. " +
         "For every task involving a website, browser navigation, web search, page content, forms, or any visual interface, you MUST use the computer tool to operate the visible Chrome window. Take a screenshot before the first visual action and after navigation or any major visual change. Never replace visible browser interaction with curl, wget, a headless browser, or a Bash-based web request. " +
-        "Weather, forecasts, news, prices, latest information, and requests to look something up are web tasks. Never answer them from memory. For the canonical Dubai weather task, visibly open a reliable weather or search website in Chrome, read the current result from the page, and only then summarize it for the user. " +
+        "Weather, forecasts, news, prices, latest information, and requests to look something up are web tasks. Never answer them from memory. For weather tasks, first visibly navigate to the lightweight page https://wttr.in/<URL-encoded-city>?format=3; if it is unavailable, use another reliable weather site. For the canonical Dubai weather task, open https://wttr.in/Dubai?format=3 in Chrome, read the current result from the page, and only then summarize it for the user. " +
+        "For text-only models, screenshot tool results contain a text observation of the same visible Chrome page, including visible controls and coordinates; use that observation exactly as you would inspect the screenshot. Use the computer navigate action for every browser URL or address-bar search, then wait and take another screenshot. " +
         "Use the bash tool only for background work that has no meaningful visual interaction, such as filesystem operations, source inspection, or running local commands. " +
         "Be sure to advise the user when waiting is necessary. " +
         "If the browser opens with a setup wizard, YOU MUST IGNORE IT and move straight to the next step (e.g. input the url in the search bar).",
@@ -160,9 +170,13 @@ export async function POST(req: Request) {
         preserveLatestScreenshot: true,
       }),
       tools,
-      // DeepSeek Thinking mode rejects the tool_choice field entirely. Keep tools
-      // available and rely on the browser-first system instruction for this provider.
-      toolChoice: initialToolChoice(messages, modelConfig),
+      experimental_repairToolCall: usesGenericTools
+        ? repairCompatibleToolCall
+        : undefined,
+      // Server-side multi-step execution needs the model to stop calling tools and
+      // return final text. DeepSeek Thinking mode rejects tool_choice entirely.
+      toolChoice:
+        configuredDeepSeekThinking === "enabled" ? undefined : "auto",
       providerOptions: modelConfig.provider === "kimi"
         ? {
             kimi: {

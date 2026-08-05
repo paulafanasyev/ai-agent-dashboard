@@ -24,6 +24,7 @@ const computerActions = new Set<ComputerAction>([
   "middle_click",
   "triple_click",
   "mouse_move",
+  "navigate",
   "type",
   "key",
   "scroll",

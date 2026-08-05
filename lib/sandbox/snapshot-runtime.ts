@@ -61,7 +61,7 @@ lib.XCloseDisplay(d)
 # Start and supervise the window manager, noVNC proxy, and Chrome.
 supervise openbox env DISPLAY=:99 openbox &
 supervise websockify websockify --web /usr/share/novnc 6080 localhost:5900 &
-supervise chrome env DISPLAY=:99 google-chrome --no-sandbox --disable-gpu --no-first-run --disable-dev-shm-usage --start-maximized about:blank &
+supervise chrome env DISPLAY=:99 google-chrome --no-sandbox --disable-gpu --no-first-run --disable-dev-shm-usage --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-profile --start-maximized about:blank &
 
 echo "Desktop environment started"
 wait

@@ -29,7 +29,6 @@ interface DashboardSessionActionsOptions {
   activeSessionIdRef: { current: string | null };
   setActiveSessionId: React.Dispatch<React.SetStateAction<string | null>>;
   streamUrlsRef: { current: Record<string, string> };
-  viewerReadyRef: { current: Set<string> };
   verifyDesktop: (sessionId: string, showChecking: boolean) => Promise<void>;
   destroyDesktop: (sessionId: string, sandboxId: string) => Promise<void>;
   removeStreamUrl: (sessionId: string) => void;
@@ -48,7 +47,6 @@ export function useDashboardSessionActions({
   activeSessionIdRef,
   setActiveSessionId,
   streamUrlsRef,
-  viewerReadyRef,
   verifyDesktop,
   destroyDesktop,
   removeStreamUrl,
@@ -92,8 +90,16 @@ export function useDashboardSessionActions({
   /** Adds an isolated Conversation while preserving the current Desktop and Sandbox identity. */
   const createConversation = useCallback(() => {
     if (agentStatus !== "idle" || !activeSessionIdRef.current) return;
-    const conversation = createEmptyConversation();
     const sessionId = activeSessionIdRef.current;
+    const currentSession = sessionsRef.current.find(
+      (session) => session.id === sessionId,
+    );
+    const currentModelId =
+      currentSession?.conversations.find(
+        (conversation) =>
+          conversation.id === currentSession.activeConversationId,
+      )?.apiConfigId ?? null;
+    const conversation = createEmptyConversation(currentModelId);
     setSessions((previous) =>
       previous.map((session) =>
         session.id === sessionId
@@ -108,7 +114,7 @@ export function useDashboardSessionActions({
     );
     setSelectedEventId(null);
     toast.success("New conversation opened in the current desktop");
-  }, [activeSessionIdRef, agentStatus, setSelectedEventId, setSessions]);
+  }, [activeSessionIdRef, agentStatus, sessionsRef, setSelectedEventId, setSessions]);
 
   /** Switches chat history only when no active stream can be detached from its owner. */
   const selectConversation = useCallback(
@@ -231,7 +237,6 @@ export function useDashboardSessionActions({
       const conversation = session?.conversations.find(
         (item) => item.id === session.activeConversationId,
       );
-      viewerReadyRef.current.delete(sessionId);
       activeSessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
       setSelectedEventId(conversation?.events.at(-1)?.id ?? null);
@@ -249,7 +254,6 @@ export function useDashboardSessionActions({
       setSelectedEventId,
       streamUrlsRef,
       verifyDesktop,
-      viewerReadyRef,
     ],
   );
 

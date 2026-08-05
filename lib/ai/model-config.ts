@@ -56,7 +56,6 @@ export type ApiConfigProfile = {
 
 export type ApiConfigState = {
   profiles: ApiConfigProfile[];
-  defaultConfigId: string | null;
 };
 
 export type SelectableApiConfig = {
@@ -68,7 +67,6 @@ export type SelectableApiConfig = {
 
 export const EMPTY_API_CONFIG_STATE: ApiConfigState = {
   profiles: [],
-  defaultConfigId: null,
 };
 
 /** Narrows untrusted stored values to the reasoning levels accepted by the Kimi API. */
@@ -285,15 +283,7 @@ export function parseStoredApiConfigState(value: unknown): ApiConfigState | null
     });
   }
 
-  const storedDefault =
-    typeof candidate.defaultConfigId === "string"
-      ? candidate.defaultConfigId
-      : null;
-  const defaultConfigId =
-    storedDefault === PROJECT_CLAUDE_CONFIG_ID || ids.has(storedDefault ?? "")
-      ? storedDefault
-      : profiles[0]?.id ?? null;
-  return { profiles, defaultConfigId };
+  return { profiles };
 }
 
 /** Gives a migrated single-provider setting a useful editable profile name. */

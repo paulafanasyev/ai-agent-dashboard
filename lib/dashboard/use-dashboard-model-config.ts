@@ -65,17 +65,7 @@ export function useDashboardModelConfig({
       : profiles;
   }, [apiConfigState.profiles, projectClaudeAvailable]);
 
-  const fallbackConfigId = useMemo(() => {
-    if (
-      apiConfigState.defaultConfigId &&
-      selectableApiConfigs.some(
-        (profile) => profile.id === apiConfigState.defaultConfigId,
-      )
-    ) {
-      return apiConfigState.defaultConfigId;
-    }
-    return selectableApiConfigs[0]?.id ?? null;
-  }, [apiConfigState.defaultConfigId, selectableApiConfigs]);
+  const fallbackConfigId = selectableApiConfigs[0]?.id ?? null;
 
   const selectedApiConfigId =
     activeConversation?.apiConfigId &&
@@ -98,7 +88,6 @@ export function useDashboardModelConfig({
       };
       setApiConfigState((previous) => ({
         profiles: [...previous.profiles, normalizedProfile],
-        defaultConfigId: previous.defaultConfigId ?? normalizedProfile.id,
       }));
     },
     [setApiConfigState],
@@ -126,14 +115,7 @@ export function useDashboardModelConfig({
         const profiles = previous.profiles.filter(
           (profile) => profile.id !== profileId,
         );
-        return {
-          profiles,
-          defaultConfigId:
-            previous.defaultConfigId === profileId
-              ? profiles[0]?.id ??
-                (projectClaudeAvailable ? PROJECT_CLAUDE_CONFIG_ID : null)
-              : previous.defaultConfigId,
-        };
+        return { profiles };
       });
       setSessions((previous) =>
         previous.map((session) => ({
@@ -152,18 +134,7 @@ export function useDashboardModelConfig({
         })),
       );
     },
-    [projectClaudeAvailable, setApiConfigState, setSessions],
-  );
-
-  const setDefaultApiConfig = useCallback(
-    (profileId: string) => {
-      if (!selectableApiConfigs.some((profile) => profile.id === profileId)) return;
-      setApiConfigState((previous) => ({
-        ...previous,
-        defaultConfigId: profileId,
-      }));
-    },
-    [selectableApiConfigs, setApiConfigState],
+    [setApiConfigState, setSessions],
   );
 
   const selectApiConfig = useCallback(
@@ -210,7 +181,6 @@ export function useDashboardModelConfig({
     createApiConfig,
     updateApiConfig,
     deleteApiConfig,
-    setDefaultApiConfig,
     selectApiConfig,
   };
 }

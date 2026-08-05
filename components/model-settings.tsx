@@ -32,13 +32,11 @@ import { cn } from "@/lib/utils";
 
 interface DashboardSettingsProps {
   profiles: ApiConfigProfile[];
-  defaultConfigId: string | null;
   modelDisabled: boolean;
   trigger: "rail" | "icon";
   onCreateConfig: (profile: ApiConfigProfile) => void;
   onUpdateConfig: (profile: ApiConfigProfile) => void;
   onDeleteConfig: (profileId: string) => void;
-  onSetDefaultConfig: (profileId: string) => void;
   onReplayTutorial: () => void;
   onClearAllData: () => Promise<void>;
   vncClientDiagnostics: VncClientDiagnostics;
@@ -52,13 +50,11 @@ type SettingsSection = "api" | "appearance" | "tutorial" | "vnc" | "data";
 /** Composes Settings navigation while each section owns its own view and domain-specific state. */
 export function DashboardSettings({
   profiles,
-  defaultConfigId,
   modelDisabled,
   trigger,
   onCreateConfig,
   onUpdateConfig,
   onDeleteConfig,
-  onSetDefaultConfig,
   onReplayTutorial,
   onClearAllData,
   vncClientDiagnostics,
@@ -195,13 +191,11 @@ export function DashboardSettings({
                 {activeSection === "api" ? (
                   <ApiSettings
                     profiles={profiles}
-                    defaultConfigId={defaultConfigId}
                     modelDisabled={modelDisabled}
                     projectClaudeAvailable={projectClaudeAvailable}
                     onCreate={onCreateConfig}
                     onUpdate={onUpdateConfig}
                     onDelete={onDeleteConfig}
-                    onSetDefault={onSetDefaultConfig}
                   />
                 ) : activeSection === "appearance" ? (
                   <section

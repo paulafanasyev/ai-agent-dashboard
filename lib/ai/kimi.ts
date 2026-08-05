@@ -7,9 +7,29 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel, type LanguageModelV1Middleware } from "ai";
 import { KIMI_BASE_URL } from "./model-config";
 
-const exposeToolImagesToModel: LanguageModelV1Middleware = {
-  middlewareVersion: "v1",
-  transformParams: async ({ params }) => {
+function screenshotText(
+  result: unknown,
+  content: Array<{ type: string; text?: string }> | undefined,
+) {
+  const contentText = content
+    ?.filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+  if (contentText) return contentText;
+  if (typeof result !== "object" || result === null || !("text" in result)) {
+    return "Screenshot captured, but no text observation was available.";
+  }
+  return typeof result.text === "string"
+    ? result.text
+    : "Screenshot captured, but no text observation was available.";
+}
+
+/** Converts tool screenshots to either visual input or a text observation per provider capability. */
+function toolImageMiddleware(supportsVision: boolean): LanguageModelV1Middleware {
+  return {
+    middlewareVersion: "v1",
+    transformParams: async ({ params }) => {
     const prompt: typeof params.prompt = [];
 
     for (const message of params.prompt) {
@@ -49,19 +69,21 @@ const exposeToolImagesToModel: LanguageModelV1Middleware = {
         continue;
       }
 
-      prompt.push(
-        {
-          ...message,
-          content: message.content.map((part) => ({
-            ...part,
-            result:
-              part.content?.some((content) => content.type === "image") === true
+      prompt.push({
+        ...message,
+        content: message.content.map((part) => ({
+          ...part,
+          result:
+            part.content?.some((content) => content.type === "image") === true
+              ? supportsVision
                 ? "Screenshot captured and attached in the next user message."
-                : part.result,
-            content: undefined,
-          })),
-        },
-        {
+                : screenshotText(part.result, part.content)
+              : part.result,
+          content: undefined,
+        })),
+      });
+      if (supportsVision) {
+        prompt.push({
           role: "user" as const,
           content: [
             {
@@ -74,13 +96,14 @@ const exposeToolImagesToModel: LanguageModelV1Middleware = {
               mimeType: part.mimeType ?? "image/png",
             })),
           ],
-        },
-      );
+        });
+      }
     }
 
     return { ...params, prompt };
-  },
-};
+    },
+  };
+}
 
 /** Builds a compatible provider model with screenshot-result middleware for visual tool use. */
 export function createOpenAICompatibleModel({
@@ -90,6 +113,7 @@ export function createOpenAICompatibleModel({
   modelId,
   providerName,
   requestFetch,
+  supportsVision = true,
 }: {
   apiKey: string;
   baseUrl: string;
@@ -97,6 +121,7 @@ export function createOpenAICompatibleModel({
   modelId: string;
   providerName: string;
   requestFetch?: typeof globalThis.fetch;
+  supportsVision?: boolean;
 }) {
   const baseFetch = requestFetch ?? globalThis.fetch;
   const compatibleFetch: typeof globalThis.fetch | undefined = extraBody
@@ -115,7 +140,7 @@ export function createOpenAICompatibleModel({
 
   return wrapLanguageModel({
     model: provider.chatModel(modelId),
-    middleware: exposeToolImagesToModel,
+    middleware: toolImageMiddleware(supportsVision),
     modelId,
     providerId: providerName,
   });

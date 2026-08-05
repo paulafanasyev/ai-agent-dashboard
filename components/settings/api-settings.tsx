@@ -12,7 +12,6 @@ import {
   Pencil,
   Plus,
   ShieldCheck,
-  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,7 +26,6 @@ import {
   DEFAULT_DEEPSEEK_MODEL_ID,
   DEFAULT_KIMI_MODEL_ID,
   KIMI_BASE_URL,
-  PROJECT_CLAUDE_CONFIG_ID,
   isSafeCustomBaseUrl,
   modelProviderLabel,
   type ApiConfigProfile,
@@ -41,25 +39,21 @@ type EditableProvider = "anthropic-byok" | "kimi" | "deepseek" | "custom";
 
 interface ApiSettingsProps {
   profiles: ApiConfigProfile[];
-  defaultConfigId: string | null;
   modelDisabled: boolean;
   projectClaudeAvailable: boolean;
   onCreate: (profile: ApiConfigProfile) => void;
   onUpdate: (profile: ApiConfigProfile) => void;
   onDelete: (profileId: string) => void;
-  onSetDefault: (profileId: string) => void;
 }
 
 /** Shows saved configurations first and opens a secondary dialog only for add/edit actions. */
 export function ApiSettings({
   profiles,
-  defaultConfigId,
   modelDisabled,
   projectClaudeAvailable,
   onCreate,
   onUpdate,
   onDelete,
-  onSetDefault,
 }: ApiSettingsProps) {
   const [editorProfileId, setEditorProfileId] = useState<
     string | null | undefined
@@ -105,7 +99,7 @@ export function ApiSettings({
             API Configuration
           </h3>
           <p className="mt-1 text-[10px] text-zinc-500">
-            Choose a default here, then select a model per Conversation.
+            Configurations are used in list order unless a Conversation selects another model.
           </p>
         </div>
         <button
@@ -122,24 +116,10 @@ export function ApiSettings({
       <div className="grid gap-3 sm:grid-cols-2">
         {projectClaudeAvailable ? (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
                 <KeyRound className="size-4" />
               </span>
-              {defaultConfigId === PROJECT_CLAUDE_CONFIG_ID ? (
-                <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[9px] font-semibold text-violet-400">
-                  Default
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onSetDefault(PROJECT_CLAUDE_CONFIG_ID)}
-                  disabled={modelDisabled}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-                >
-                  <Star className="size-3" /> Set default
-                </button>
-              )}
             </div>
             <p className="mt-4 truncate text-xs font-semibold text-zinc-900">
               Project Claude
@@ -157,24 +137,10 @@ export function ApiSettings({
               key={profile.id}
               className="group rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 transition-colors hover:bg-zinc-100"
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
                   <KeyRound className="size-4" />
                 </span>
-                {defaultConfigId === profile.id ? (
-                  <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[9px] font-semibold text-violet-400">
-                    Default
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onSetDefault(profile.id)}
-                    disabled={modelDisabled}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-                  >
-                    <Star className="size-3" /> Set default
-                  </button>
-                )}
               </div>
 
               <p className="mt-4 truncate font-mono text-xs font-semibold text-zinc-900">

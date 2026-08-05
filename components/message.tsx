@@ -87,6 +87,8 @@ function actionPresentation(args: Record<string, unknown>): {
       return { label: "Double click", detail: coordinate ?? "", icon: MousePointer2 };
     case "mouse_move":
       return { label: "Move cursor", detail: coordinate ?? "", icon: MousePointer2 };
+    case "navigate":
+      return { label: "Navigate", detail: text ?? "", icon: Keyboard };
     case "type":
       return { label: "Type", detail: text ? `“${text}”` : "", icon: Keyboard };
     case "key":
@@ -141,11 +143,6 @@ const PurePreviewMessage = ({
 }: PreviewMessageProps) => {
   const [copiedPartKey, setCopiedPartKey] = useState<string | null>(null);
   const copyFeedbackTimerRef = useRef<number | null>(null);
-  const renderStreamingTextPlainly =
-    isLatestMessage &&
-    message.role === "assistant" &&
-    (status === "submitted" || status === "streaming");
-
   useEffect(
     () => () => {
       if (copyFeedbackTimerRef.current !== null) {
@@ -212,13 +209,7 @@ const PurePreviewMessage = ({
                           "rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground",
                       )}
                     >
-                      {renderStreamingTextPlainly ? (
-                        <p className="whitespace-pre-wrap break-words">
-                          {part.text}
-                        </p>
-                      ) : (
-                        <Streamdown>{part.text}</Streamdown>
-                      )}
+                      <Streamdown mode="static">{part.text}</Streamdown>
                     </div>
                     {message.role !== "user" ? (
                       <CopyTextButton

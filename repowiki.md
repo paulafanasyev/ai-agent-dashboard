@@ -140,12 +140,12 @@ components/
 lib/
   ai/
     anthropic.ts                 Anthropic provider configuration
-    browser-routing.ts           Visible-browser intent detection
     kimi.ts                      OpenAI-compatible model and image middleware
     model-config.ts              Model configuration types and validation helpers
   dashboard/
     events.ts                    Tool/runtime event normalization and derived state
     presentation.ts              Stable labels and presentation keys
+    retained-session-pool.ts     Three-viewer MRU retention policy
     session-storage.ts           Versioned browser persistence and redaction
     types.ts                     Event and session contracts
     use-dashboard-persistence.ts Session hydration and persistence
@@ -227,7 +227,8 @@ available.
   reconnect, and creation controls sit above the VNC surface. The inspector is
   omitted from the primary phone layout so chat input remains continuously
   available.
-- **VNC:** the viewer is mounted once above the responsive layout branches.
+- **VNC:** an LRU pool keeps the three most recently selected viewers mounted
+  above the responsive layout branches. Only the active viewer is visible.
   Crossing between horizontal and stacked layouts repositions the same React
   subtree and iframe, so resizing the window does not restart noVNC.
 
@@ -235,9 +236,9 @@ available.
 
 `vnc-viewer.tsx` supports `embedded`, `minimized`, and `pip` display modes. The
 dashboard owns the active mode so the surrounding desktop and phone layouts can
-release space when the viewer leaves its embedded position. The viewer keeps one
-keyed iframe mounted across mode changes, preserving the noVNC connection instead
-of allocating a new sandbox or desktop stream.
+release space when the viewer leaves its embedded position. Each retained viewer
+keeps its keyed iframe mounted across mode and Desktop changes, preserving up to
+three noVNC connections instead of allocating a new sandbox or desktop stream.
 
 Picture-in-picture uses a fixed, viewport-constrained window whose header is a
 mouse and touch drag handle. Its position is clamped again after viewport resize.
@@ -348,9 +349,13 @@ leaves a persistent empty state with direct Create desktop and Settings access.
 ### Desktop switching
 
 Switching desktop sessions selects a different sandbox and its active
-conversation. If the sandbox ID still points to a running runtime, the server
-reconnects to it. Otherwise, a replacement sandbox is created and the generation
-counter changes so the iframe can be intentionally remounted.
+conversation. The three most recently selected sessions remain mounted in MRU
+order, with inactive viewers hidden but connected. Selecting a fourth Desktop
+unmounts only the least-recent viewer and marks it available for reconnection;
+the session history and Sandbox ID are not deleted. If that Sandbox ID still
+points to a running runtime, the server reconnects to it. Otherwise, a
+replacement sandbox is created and the generation counter changes so the iframe
+can be intentionally remounted.
 
 ### Deletion and page exit
 
@@ -467,13 +472,19 @@ type ClientModelConfig =
 
 - Uses the official `https://api.deepseek.com` endpoint and defaults to
   `deepseek-v4-flash`.
-- Defaults Thinking mode to `disabled`, allowing visible browser intents to force
-  `computer` as the first tool.
+- Defaults Thinking mode to `disabled` for the most reliable multi-step Desktop
+  automation.
 - When Thinking is enabled, omits `tool_choice` entirely because DeepSeek rejects
   that field in this mode.
 - Injects the selected `thinking.type` into the real provider request body.
 - Uses `@ai-sdk/openai-compatible` reasoning events plus middleware metadata to
   replay `reasoning_content` on subsequent tool-call turns, as required by DeepSeek.
+- Treats DeepSeek V4 as text-only. Screenshot actions still update the visible
+  dashboard and inspector, but the provider receives a local Chrome DevTools text
+  observation of the same visible page instead of an unsupported `image_url` part.
+- Runs the bounded tool loop in one server request and applies schema-validated,
+  deterministic repair only to known compatible-provider action aliases or
+  malformed embedded parameters before execution.
 - Migrates legacy custom profiles targeting the official DeepSeek origin into the
   first-class provider with Thinking disabled.
 
@@ -488,10 +499,11 @@ type ClientModelConfig =
 ### Screenshot middleware
 
 Generic tool results can contain an image payload. `lib/ai/kimi.ts` rewrites a
-screenshot result into a following multimodal user message so an
-OpenAI-compatible vision model can inspect the current desktop. Providers used
-through the custom path must support tool calls and image input for full
-computer-use behavior.
+screenshot result into a following multimodal user message when the selected
+provider supports vision. Text-only DeepSeek profiles instead receive the text
+observation captured from visible Chrome; the image remains available to the user
+and inspector but is excluded from the provider request. Custom profiles must
+support tool calls and image input for full visual computer-use behavior.
 
 ## 10. Tool Execution Layer
 
@@ -528,15 +540,14 @@ to capture the screen before its first action and after navigation or major
 visual changes. It must not replace observable browser work with `curl`, `wget`,
 headless automation, or Bash-based web requests.
 
-This policy has two enforcement layers. `lib/ai/browser-routing.ts` recognizes
-web, weather, forecast, search, latest-information, and equivalent Chinese
-intents when the newest message is from the user. `/api/chat` then forces the
-first model step to call `computer` for providers that support explicit tool
-selection; DeepSeek Thinking mode omits `tool_choice` and follows the same policy
-through its system instruction. Later tool-result turns return to automatic tool
-selection. The system instruction separately requires screenshots and
-visible Chrome navigation. This makes the canonical "What's the weather in
-Dubai?" demo observable without forcing every later step into another tool call.
+The `/api/chat` system instruction requires web, weather, forecast, search,
+latest-information, and equivalent intents to use visible Chrome. It also directs
+compatible models to use the dedicated `navigate` action, then wait and capture a
+screenshot. DeepSeek Thinking mode omits unsupported explicit `tool_choice`; all
+compatible providers otherwise use automatic selection so the server-side loop
+can stop calling tools and return final text. This keeps the canonical "What's the
+weather in Dubai?" demo observable without forcing every later step into another
+tool call.
 
 ### Bash actions
 
@@ -674,8 +685,10 @@ storage. This avoids exceeding browser storage quotas with base64 image data.
 ### BYOK credentials
 
 - API profiles and keys are stored in `sessionStorage`, not `localStorage`.
-- Profiles support create, edit, delete, and default selection; conversations
-  persist only the selected profile ID, never credentials.
+- Profiles support create, edit, and delete. The first available profile in list
+  order is the implicit fallback; conversations persist only an explicit selected
+  profile ID, never credentials. A newly created conversation inherits the
+  previous conversation's explicit selection.
 - Closing the tab clears browser-held model configuration.
 - Keys are sent to this application's `/api/chat` route for forwarding.
 - Keys are never copied into session history or rendered in the event inspector.
@@ -717,7 +730,9 @@ Request fields:
 | `modelConfig` | Discriminated Project Claude, Anthropic BYOK, Kimi, DeepSeek, or custom configuration |
 
 The route validates the body and rechecks Sandbox, Xvnc, and noVNC health before
-creating the model or allowing a tool call. An unavailable desktop returns HTTP
+creating the model or allowing a tool call. The route trusts the viewer's existing
+external handshake and performs only Sandbox-local service checks, avoiding a
+second RFB connection that can contend with a retained noVNC viewer. An unavailable desktop returns HTTP
 409 and remains owned by the session queue. Invalid configuration returns HTTP
 400, while hosted Project Claude requests return HTTP 403. Unexpected model
 failures return HTTP 500 without destroying the desktop.
@@ -813,7 +828,9 @@ Current automated coverage includes:
 - Multi-profile API CRUD, per-conversation model selection, and DeepSeek Thinking persistence.
 - DeepSeek request-body injection, provider-aware `tool_choice`, and
   `reasoning_content` replay after a tool call.
+- DeepSeek text-only screenshot bridging and compatible tool-call repair.
 - Responsive viewer identity and Desktop details at desktop and mobile breakpoints.
+- Three-session noVNC retention with least-recent viewer eviction.
 
 Future coverage should add live-provider contract tests, deeper VNC render-count
 instrumentation, and Sandbox failure recovery.

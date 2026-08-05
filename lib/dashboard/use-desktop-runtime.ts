@@ -19,6 +19,7 @@ import {
   startRuntimeEvent,
 } from "@/lib/dashboard/events";
 import { persistSessions } from "@/lib/dashboard/session-storage";
+import { retainDesktopSessionIds } from "@/lib/dashboard/retained-session-pool";
 import type { ChatSession, RuntimeEvent } from "@/lib/dashboard/types";
 import {
   VNC_HANDSHAKE_TIMEOUT_MS,
@@ -49,9 +50,12 @@ export function useDesktopRuntime({
   isHydrated,
 }: DesktopRuntimeOptions) {
   const [streamUrls, setStreamUrls] = useState<Record<string, string>>({});
+  const [retainedSessionIds, setRetainedSessionIds] = useState<string[]>([]);
   const sessionsRef = useRef(sessions);
   const streamUrlsRef = useRef(streamUrls);
   const activeSessionIdRef = useRef(activeSessionId);
+  const retainedSessionIdsRef = useRef<string[]>([]);
+  const previousRetainedSessionIdsRef = useRef<string[]>([]);
   const connectingRef = useRef(new Set<string>());
   const verifyingRef = useRef(new Set<string>());
   const viewerReadyRef = useRef(new Set<string>());
@@ -67,6 +71,21 @@ export function useDesktopRuntime({
     () => void (activeSessionIdRef.current = activeSessionId),
     [activeSessionId],
   );
+
+  useEffect(() => {
+    setRetainedSessionIds((previous) => {
+      const next = retainDesktopSessionIds(
+        previous,
+        activeSessionId,
+        sessions.map((session) => session.id),
+      );
+      retainedSessionIdsRef.current = next;
+      return next.length === previous.length &&
+        next.every((sessionId, index) => sessionId === previous[index])
+        ? previous
+        : next;
+    });
+  }, [activeSessionId, sessions]);
 
   /** Inserts or replaces one lifecycle event while bounding per-Desktop history to 200 entries. */
   const upsertRuntimeEvent = useCallback(
@@ -106,6 +125,43 @@ export function useDesktopRuntime({
     });
   }, []);
 
+  /**
+   * Unmounting an LRU viewer releases only its browser connection. The Sandbox ID stays attached
+   * to the Desktop record so selecting it later reconnects to the same remote workspace.
+   */
+  useEffect(() => {
+    const retainedIds = new Set(retainedSessionIds);
+    const evictedIds = previousRetainedSessionIdsRef.current.filter(
+      (sessionId) => !retainedIds.has(sessionId),
+    );
+    previousRetainedSessionIdsRef.current = retainedSessionIds;
+    if (evictedIds.length === 0) return;
+
+    for (const sessionId of evictedIds) {
+      const controller = controllersRef.current.get(sessionId);
+      if (controller) clearConnectionController(controller);
+      viewerReadyRef.current.delete(sessionId);
+      viewerEventRef.current.delete(sessionId);
+    }
+    setStreamUrls((previous) => {
+      const next = { ...previous };
+      for (const sessionId of evictedIds) delete next[sessionId];
+      return next;
+    });
+    setSessions((previous) =>
+      previous.map((session) =>
+        evictedIds.includes(session.id)
+          ? {
+              ...session,
+              connectionStatus: session.sandboxId
+                ? "offline"
+                : "uninitialized",
+            }
+          : session,
+      ),
+    );
+  }, [retainedSessionIds, setSessions]);
+
   useEffect(() => {
     const activeIds = new Set(sessions.map((session) => session.id));
     for (const [sessionId, controller] of controllersRef.current) {
@@ -138,7 +194,7 @@ export function useDesktopRuntime({
       controller.retryTimer = window.setTimeout(() => {
         controller.retryTimer = null;
         removeStreamUrl(sessionId);
-        if (activeSessionIdRef.current !== sessionId) {
+        if (!retainedSessionIdsRef.current.includes(sessionId)) {
           setSessions((previous) =>
             previous.map((session) =>
               session.id === sessionId
@@ -160,6 +216,7 @@ export function useDesktopRuntime({
    */
   const connectDesktop = useCallback(
     async (sessionId: string, queueIfBusy = false) => {
+      if (!retainedSessionIdsRef.current.includes(sessionId)) return;
       const controller = controllerFor(sessionId);
       if (
         connectingRef.current.has(sessionId) ||
@@ -205,33 +262,37 @@ export function useDesktopRuntime({
             message: `Sandbox ${desktop.id} is available.`,
           }),
         );
-        const viewerEvent = startRuntimeEvent(sessionId, "vnc_connect", {
-          sandboxId: desktop.id,
-          source: "viewer",
-          message: "Waiting for the noVNC viewer handshake.",
-        });
-        viewerEventRef.current.set(sessionId, viewerEvent);
-        upsertRuntimeEvent(sessionId, viewerEvent);
-        setStreamUrls((previous) => ({
-          ...previous,
-          [sessionId]: desktop.streamUrl,
-        }));
-        viewerReadyRef.current.delete(sessionId);
-        controller.handshakeTimer = window.setTimeout(() => {
-          controller.handshakeTimer = null;
-          if (viewerReadyRef.current.has(sessionId)) return;
-          setSessions((previous) =>
-            previous.map((item) =>
-              item.id === sessionId
-                ? { ...item, connectionStatus: "reconnecting" }
-                : item,
-            ),
-          );
-          removeStreamUrl(sessionId);
-          if (activeSessionIdRef.current === sessionId) {
-            scheduleReconnect(sessionId);
-          }
-        }, VNC_HANDSHAKE_TIMEOUT_MS);
+        const shouldRetainViewer =
+          retainedSessionIdsRef.current.includes(sessionId);
+        if (shouldRetainViewer) {
+          const viewerEvent = startRuntimeEvent(sessionId, "vnc_connect", {
+            sandboxId: desktop.id,
+            source: "viewer",
+            message: "Waiting for the noVNC viewer handshake.",
+          });
+          viewerEventRef.current.set(sessionId, viewerEvent);
+          upsertRuntimeEvent(sessionId, viewerEvent);
+          setStreamUrls((previous) => ({
+            ...previous,
+            [sessionId]: desktop.streamUrl,
+          }));
+          viewerReadyRef.current.delete(sessionId);
+          controller.handshakeTimer = window.setTimeout(() => {
+            controller.handshakeTimer = null;
+            if (viewerReadyRef.current.has(sessionId)) return;
+            setSessions((previous) =>
+              previous.map((item) =>
+                item.id === sessionId
+                  ? { ...item, connectionStatus: "reconnecting" }
+                  : item,
+              ),
+            );
+            removeStreamUrl(sessionId);
+            if (retainedSessionIdsRef.current.includes(sessionId)) {
+              scheduleReconnect(sessionId);
+            }
+          }, VNC_HANDSHAKE_TIMEOUT_MS);
+        }
         setSessions((previous) =>
           previous.map((item) =>
             item.id === sessionId
@@ -242,7 +303,9 @@ export function useDesktopRuntime({
                     item.sandboxId && item.sandboxId !== desktop.id
                       ? item.generation + 1
                       : item.generation,
-                  connectionStatus: "checking",
+                  connectionStatus: shouldRetainViewer
+                    ? "checking"
+                    : "offline",
                 }
               : item,
           ),
@@ -301,7 +364,7 @@ export function useDesktopRuntime({
         controller.offlineTimer = null;
         if (viewerReadyRef.current.has(sessionId)) return;
         removeStreamUrl(sessionId);
-        if (activeSessionIdRef.current === sessionId) {
+        if (retainedSessionIdsRef.current.includes(sessionId)) {
           scheduleReconnect(sessionId);
         }
       }, VNC_OFFLINE_GRACE_MS);
@@ -313,7 +376,7 @@ export function useDesktopRuntime({
     isHydrated,
     sessionsRef,
     streamUrlsRef,
-    activeSessionIdRef,
+    retainedSessionIdsRef,
     connectingRef,
     verifyingRef,
     viewerReadyRef,
@@ -421,7 +484,7 @@ export function useDesktopRuntime({
    */
   const handleViewerStateChange = useCallback(
     (sessionId: string, state: VncViewerState) => {
-      if (sessionId !== activeSessionIdRef.current) return;
+      if (!retainedSessionIdsRef.current.includes(sessionId)) return;
       const controller = controllerFor(sessionId);
       if (state === "ready") {
         clearConnectionController(controller);
@@ -515,6 +578,7 @@ export function useDesktopRuntime({
 
   return {
     streamUrls,
+    retainedSessionIds,
     streamUrlsRef,
     viewerReadyRef,
     verifyDesktop,

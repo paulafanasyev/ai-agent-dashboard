@@ -141,7 +141,7 @@ function ChatWorkspaceComponent({
       modelConfig,
       desktopReady: connectionReady,
     }),
-    maxSteps: 30,
+    maxSteps: 1,
     onError: (error) => {
       const activePrompt = activePromptRef.current;
       if (
@@ -312,6 +312,7 @@ function ChatWorkspaceComponent({
         </div>
         <button
           type="button"
+          aria-label="New conversation"
           onClick={createOrFocusConversation}
           disabled={isLoading}
           className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-surface hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
