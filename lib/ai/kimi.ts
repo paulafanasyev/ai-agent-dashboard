@@ -5,7 +5,6 @@
  */
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel, type LanguageModelV1Middleware } from "ai";
-import { KIMI_BASE_URL } from "./model-config";
 
 function screenshotText(
   result: unknown,
@@ -164,11 +163,15 @@ export function mergeJsonRequestBody(
   }
 }
 
-/** Applies the fixed Kimi coding endpoint while reusing the generic compatible-model adapter. */
-export function createKimiModel(apiKey: string, modelId: string) {
+/** Applies a configured Kimi endpoint while reusing the generic compatible-model adapter. */
+export function createKimiModel(
+  apiKey: string,
+  modelId: string,
+  baseUrl: string,
+) {
   return createOpenAICompatibleModel({
     apiKey,
-    baseUrl: KIMI_BASE_URL,
+    baseUrl,
     modelId,
     providerName: "kimi",
   });

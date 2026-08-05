@@ -6,7 +6,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ANTHROPIC_BASE_URL,
+  DEEPSEEK_BASE_URL,
   DEFAULT_DEEPSEEK_MODEL_ID,
+  KIMI_BASE_URL,
   isDeepSeekModelConfig,
   parseStoredApiConfigState,
   parseStoredModelConfig,
@@ -37,6 +40,7 @@ describe("API model configuration", () => {
           config: {
             provider: "deepseek",
             apiKey: "sk-deepseek-test",
+            baseUrl: DEEPSEEK_BASE_URL,
             modelId: "deepseek-v4-flash",
             thinkingMode: "disabled",
           },
@@ -103,7 +107,11 @@ describe("API model configuration", () => {
         apiKey: "sk-legacy-test",
         modelId: "claude-legacy",
       }),
-    ).toMatchObject({ provider: "anthropic-byok", modelId: "claude-legacy" });
+    ).toMatchObject({
+      provider: "anthropic-byok",
+      baseUrl: ANTHROPIC_BASE_URL,
+      modelId: "claude-legacy",
+    });
   });
 
   it("migrates a legacy custom DeepSeek endpoint to the first-class provider", () => {
@@ -117,6 +125,7 @@ describe("API model configuration", () => {
     ).toEqual({
       provider: "deepseek",
       apiKey: "sk-deepseek-legacy",
+      baseUrl: "https://api.deepseek.com/v1",
       modelId: "deepseek-v4-pro",
       thinkingMode: "disabled",
     });
@@ -127,6 +136,7 @@ describe("API model configuration", () => {
       isDeepSeekModelConfig({
         provider: "deepseek",
         apiKey: "sk-deepseek-test",
+        baseUrl: DEEPSEEK_BASE_URL,
         modelId: "deepseek-v4-flash",
         thinkingMode: "disabled",
       }),
@@ -157,6 +167,58 @@ describe("API model configuration", () => {
         modelId: "deepseek-v4-pro",
         thinkingMode: "enabled",
       }),
-    ).toMatchObject({ provider: "deepseek", thinkingMode: "enabled" });
+    ).toMatchObject({
+      provider: "deepseek",
+      baseUrl: DEEPSEEK_BASE_URL,
+      thinkingMode: "enabled",
+    });
+  });
+
+  it("preserves editable public Base URLs for every BYOK provider", () => {
+    expect(
+      parseStoredModelConfig({
+        provider: "anthropic-byok",
+        apiKey: "sk-anthropic-test",
+        baseUrl: "https://anthropic.example.com/v1/",
+        modelId: "claude-test",
+      }),
+    ).toMatchObject({ baseUrl: "https://anthropic.example.com/v1" });
+    expect(
+      parseStoredModelConfig({
+        provider: "kimi",
+        apiKey: "sk-kimi-test",
+        baseUrl: "https://kimi.example.com/v1/",
+        modelId: "k3",
+        reasoningEffort: "high",
+      }),
+    ).toMatchObject({ baseUrl: "https://kimi.example.com/v1" });
+    expect(
+      parseStoredModelConfig({
+        provider: "deepseek",
+        apiKey: "sk-deepseek-test",
+        baseUrl: "https://deepseek.example.com/v1/",
+        modelId: "deepseek-test",
+        thinkingMode: "disabled",
+      }),
+    ).toMatchObject({ baseUrl: "https://deepseek.example.com/v1" });
+    expect(
+      parseStoredModelConfig({
+        provider: "custom",
+        apiKey: "sk-compatible-test",
+        baseUrl: "https://compatible.example.com/v1/",
+        modelId: "compatible-test",
+      }),
+    ).toMatchObject({ baseUrl: "https://compatible.example.com/v1" });
+  });
+
+  it("keeps the official Kimi endpoint when migrating a legacy profile", () => {
+    expect(
+      parseStoredModelConfig({
+        provider: "kimi",
+        apiKey: "sk-kimi-legacy",
+        modelId: "k3",
+        reasoningEffort: "high",
+      }),
+    ).toMatchObject({ baseUrl: KIMI_BASE_URL });
   });
 });

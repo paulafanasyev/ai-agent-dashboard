@@ -26,7 +26,7 @@ are implemented on `main`.
 
 - Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
 - Local Project Claude or hosted BYOK through Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible providers, all with computer-use and bash tool capabilities.
-- Multiple tab-scoped API configurations with add, edit, delete, list-order fallback, and a custom per-conversation model picker.
+- Multiple tab-scoped API configurations with add, edit, delete, list-order fallback, editable Base URLs for every BYOK provider, and a custom per-conversation model picker.
 - Configurable DeepSeek V4 Thinking mode: disabled by default for reliable Desktop automation, or enabled with compatible automatic tool selection and reasoning replay.
 - Production-style two-panel workspace: chat and sessions on the left, isolated desktop and tool inspector on the right.
 - Mobile stacked workspace with the live VNC desktop above the always-available conversation composer; crossing the responsive breakpoint moves the same viewer without restarting VNC.
@@ -177,10 +177,19 @@ configuration in list order is used automatically; use the custom model menu in
 the conversation composer to choose a different profile for that conversation.
 New conversations keep the model selected in the previous conversation.
 
-- **Anthropic** uses the official Messages API and accepts a Claude model ID.
-- **Kimi** is a preset for `https://api.kimi.com/coding/v1`; its model ID defaults to `k3`.
-- **DeepSeek** uses `https://api.deepseek.com`, defaults to `deepseek-v4-flash`, and offers a Thinking mode switch. Thinking is off by default for the most reliable multi-step Desktop automation. Because DeepSeek V4 accepts text input only, the model receives a local text observation of visible Chrome instead of an `image_url` message part.
-- **OpenAI-compatible** accepts a public HTTPS Base URL and model ID.
+- **Anthropic** defaults to `https://api.anthropic.com/v1` and accepts a Claude model ID.
+- **Kimi** defaults to `https://api.kimi.com/coding/v1`; its model ID defaults to `k3`.
+- **DeepSeek** defaults to `https://api.deepseek.com`, uses `deepseek-v4-flash` by default, and offers a Thinking mode switch. Thinking is off by default for the most reliable multi-step Desktop automation. Because DeepSeek V4 accepts text input only, the model receives a local text observation of visible Chrome instead of an `image_url` message part.
+- **OpenAI-compatible** starts with an empty endpoint and requires a Base URL and model ID.
+
+Every provider in the BYOK dialog exposes an editable **Base URL** field. Saved
+requests use that exact normalized endpoint, so compatible gateways can be used
+without changing application code. Base URLs must be public HTTPS endpoints;
+obvious loopback, private-network, local, and literal IPv6 targets are rejected
+by both the browser and `/api/chat`. Existing Anthropic, Kimi, and DeepSeek
+profiles that predate this field are migrated to the official defaults above.
+`Project Claude` is separate: its endpoint remains server-owned through
+`ANTHROPIC_BASE_URL` and is not exposed as a browser-editable profile.
 
 Configuration names are always their model IDs. API keys and profiles are stored
 only in the current tab's `sessionStorage`, sent to this app's `/api/chat` route
@@ -206,9 +215,9 @@ The browser suite covers first-open tutorial persistence, replay from Settings,
 sequential Desktop naming, conversation edit/delete controls, phrase-confirmed
 cache deletion, VNC diagnostics, and responsive viewer continuity at desktop and
 mobile breakpoints. It also verifies the three-Desktop viewer retention limit,
-multi-profile API configuration, the custom
-conversation model picker, DeepSeek Thinking mode persistence, and tab-scoped
-credential storage without a live Sandbox credential.
+multi-profile API configuration, editable and migrated per-provider Base URLs,
+the custom conversation model picker, DeepSeek Thinking mode persistence, and
+tab-scoped credential storage without a live Sandbox credential.
 
 ## Environment Variables
 
