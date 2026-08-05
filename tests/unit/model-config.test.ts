@@ -13,7 +13,7 @@ import {
 } from "@/lib/ai/model-config";
 
 describe("API model configuration", () => {
-  it("parses a DeepSeek profile and preserves the selected default", () => {
+  it("parses a DeepSeek profile and ignores the retired stored default", () => {
     const parsed = parseStoredApiConfigState({
       profiles: [
         {
@@ -42,11 +42,10 @@ describe("API model configuration", () => {
           },
         },
       ],
-      defaultConfigId: "deepseek-work",
     });
   });
 
-  it("falls back to the first valid profile when a stored default was deleted", () => {
+  it("preserves profile order when a legacy stored default was deleted", () => {
     const parsed = parseStoredApiConfigState({
       profiles: [
         {
@@ -63,7 +62,8 @@ describe("API model configuration", () => {
       defaultConfigId: "deleted-profile",
     });
 
-    expect(parsed?.defaultConfigId).toBe("kimi-main");
+    expect(parsed?.profiles.map((profile) => profile.id)).toEqual(["kimi-main"]);
+    expect(parsed).not.toHaveProperty("defaultConfigId");
   });
 
   it("rejects duplicate IDs and Project Claude credentials in BYOK storage", () => {

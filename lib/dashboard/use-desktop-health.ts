@@ -18,7 +18,7 @@ interface DesktopHealthOptions {
   isHydrated: boolean;
   sessionsRef: { current: ChatSession[] };
   streamUrlsRef: { current: Record<string, string> };
-  activeSessionIdRef: { current: string | null };
+  retainedSessionIdsRef: { current: string[] };
   connectingRef: { current: Set<string> };
   verifyingRef: { current: Set<string> };
   viewerReadyRef: { current: Set<string> };
@@ -34,13 +34,13 @@ interface DesktopHealthOptions {
 
 /**
  * Serializes server health probes and rechecks known Desktops on an interval, focus, and visibility.
- * Healthy services do not imply Ready until the active browser viewer has also confirmed its handshake.
+ * Healthy services do not imply Ready until a retained browser viewer has confirmed its handshake.
  */
 export function useDesktopHealth({
   isHydrated,
   sessionsRef,
   streamUrlsRef,
-  activeSessionIdRef,
+  retainedSessionIdsRef,
   connectingRef,
   verifyingRef,
   viewerReadyRef,
@@ -85,9 +85,10 @@ export function useDesktopHealth({
       }
 
       try {
+        const viewerIsRetained =
+          retainedSessionIdsRef.current.includes(sessionId);
         const viewerIsConfirmed =
-          activeSessionIdRef.current !== sessionId ||
-          viewerReadyRef.current.has(sessionId);
+          !viewerIsRetained || viewerReadyRef.current.has(sessionId);
         const isHealthy = await checkDesktopHealth(
           sandboxId,
           !viewerIsConfirmed,
@@ -117,12 +118,9 @@ export function useDesktopHealth({
           ),
         );
         if (!isHealthy) {
-          if (
-            activeSessionIdRef.current === sessionId &&
-            !streamUrlsRef.current[sessionId]
-          ) {
+          if (viewerIsRetained && !streamUrlsRef.current[sessionId]) {
             scheduleReconnect(sessionId);
-          } else if (activeSessionIdRef.current !== sessionId) {
+          } else if (!viewerIsRetained) {
             removeStreamUrl(sessionId);
           }
         }
@@ -144,11 +142,11 @@ export function useDesktopHealth({
           ),
         );
         if (
-          activeSessionIdRef.current === sessionId &&
+          retainedSessionIdsRef.current.includes(sessionId) &&
           !streamUrlsRef.current[sessionId]
         ) {
           scheduleReconnect(sessionId);
-        } else if (activeSessionIdRef.current !== sessionId) {
+        } else if (!retainedSessionIdsRef.current.includes(sessionId)) {
           removeStreamUrl(sessionId);
         }
       } finally {
@@ -163,10 +161,10 @@ export function useDesktopHealth({
       }
     },
     [
-      activeSessionIdRef,
       connectingRef,
       controllerFor,
       removeStreamUrl,
+      retainedSessionIdsRef,
       scheduleReconnect,
       sessionsRef,
       setSessions,
@@ -182,6 +180,7 @@ export function useDesktopHealth({
     const verifyKnownDesktops = () => {
       for (const session of sessionsRef.current) {
         if (
+          !retainedSessionIdsRef.current.includes(session.id) ||
           !session.sandboxId ||
           session.connectionStatus === "creating" ||
           connectingRef.current.has(session.id)
@@ -202,7 +201,13 @@ export function useDesktopHealth({
       window.removeEventListener("focus", verifyKnownDesktops);
       document.removeEventListener("visibilitychange", verifyWhenVisible);
     };
-  }, [connectingRef, isHydrated, sessionsRef, verifyDesktop]);
+  }, [
+    connectingRef,
+    isHydrated,
+    retainedSessionIdsRef,
+    sessionsRef,
+    verifyDesktop,
+  ]);
 
   return verifyDesktop;
 }

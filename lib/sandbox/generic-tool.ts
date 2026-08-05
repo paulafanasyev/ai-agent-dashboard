@@ -11,16 +11,25 @@ import {
   executeComputerAction,
 } from "./actions";
 
-/** Wraps shared computer actions in a provider-neutral AI SDK function tool. */
-export const genericComputerTool = (sandboxId: string) =>
+/** Wraps shared computer actions and optionally adds a text observation for text-only models. */
+export const genericComputerTool = (
+  sandboxId: string,
+  { includeScreenText = false }: { includeScreenText?: boolean } = {},
+) =>
   tool({
     description:
-      "Operate a 1024x768 Linux desktop. Take a screenshot before deciding where to click, then take another screenshot after navigation or any major visual change.",
+      "Operate a 1024x768 Linux desktop. Take a screenshot before deciding where to click, then take another screenshot after navigation or any major visual change. To open a URL or search from the browser address bar, always use the navigate action with the URL or search query in text; do not use type for the address bar. Screenshot results include a text observation when the selected model is text-only. The wait action defaults to one second when duration is omitted.",
     parameters: computerInputSchema,
-    execute: (input) => executeComputerAction(sandboxId, input),
+    execute: (input) =>
+      executeComputerAction(sandboxId, input, { includeScreenText }),
     experimental_toToolResultContent(result) {
       return result.type === "image"
-        ? [{ type: "image", data: result.data, mimeType: "image/png" }]
+        ? [
+            { type: "image" as const, data: result.data, mimeType: "image/png" },
+            ...(result.text
+              ? [{ type: "text" as const, text: result.text }]
+              : []),
+          ]
         : [{ type: "text", text: result.text }];
     },
   });

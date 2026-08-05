@@ -79,7 +79,6 @@ export function useDashboardPersistence() {
                   config: parsed,
                 },
               ],
-              defaultConfigId: profileId,
             });
           }
         }
@@ -127,10 +126,7 @@ export function useDashboardPersistence() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    if (
-      apiConfigState.profiles.length > 0 ||
-      apiConfigState.defaultConfigId !== null
-    ) {
+    if (apiConfigState.profiles.length > 0) {
       sessionStorage.setItem(
         API_CONFIGS_STORAGE_KEY,
         JSON.stringify(apiConfigState),

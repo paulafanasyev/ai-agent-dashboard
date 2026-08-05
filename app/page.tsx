@@ -52,6 +52,7 @@ export default function DashboardPage() {
   });
   const {
     streamUrls,
+    retainedSessionIds,
     streamUrlsRef,
     viewerReadyRef,
     verifyDesktop,
@@ -71,7 +72,6 @@ export default function DashboardPage() {
     activeSessionIdRef,
     setActiveSessionId,
     streamUrlsRef,
-    viewerReadyRef,
     verifyDesktop,
     destroyDesktop,
     removeStreamUrl,
@@ -123,7 +123,6 @@ export default function DashboardPage() {
     createApiConfig,
     updateApiConfig,
     deleteApiConfig,
-    setDefaultApiConfig,
     selectApiConfig,
   } = useDashboardModelConfig({
     apiConfigState,
@@ -211,13 +210,11 @@ export default function DashboardPage() {
     () => (
       <DashboardSettings
         profiles={apiConfigState.profiles}
-        defaultConfigId={apiConfigState.defaultConfigId}
         modelDisabled={agentStatus !== "idle"}
         trigger="rail"
         onCreateConfig={createApiConfig}
         onUpdateConfig={updateApiConfig}
         onDeleteConfig={deleteApiConfig}
-        onSetDefaultConfig={setDefaultApiConfig}
         onReplayTutorial={replayTutorial}
         onClearAllData={clearAllData}
         vncClientDiagnostics={vncClientDiagnostics}
@@ -236,7 +233,6 @@ export default function DashboardPage() {
       refreshActiveDesktop,
       replayTutorial,
       runActiveDesktopDiagnostics,
-      setDefaultApiConfig,
       updateApiConfig,
       vncClientDiagnostics,
     ],
@@ -266,13 +262,11 @@ export default function DashboardPage() {
   const mobileSettings = (
     <DashboardSettings
       profiles={apiConfigState.profiles}
-      defaultConfigId={apiConfigState.defaultConfigId}
       modelDisabled={agentStatus !== "idle"}
       trigger="icon"
       onCreateConfig={createApiConfig}
       onUpdateConfig={updateApiConfig}
       onDeleteConfig={deleteApiConfig}
-      onSetDefaultConfig={setDefaultApiConfig}
       onReplayTutorial={replayTutorial}
       onClearAllData={clearAllData}
       vncClientDiagnostics={vncClientDiagnostics}
@@ -290,6 +284,7 @@ export default function DashboardPage() {
       activeSession={activeSession}
       activeConversation={activeConversation}
       streamUrls={streamUrls}
+      retainedSessionIds={retainedSessionIds}
       selectedEventId={selectedEventId}
       activeEvent={activeEvent}
       activityEvent={activityEvent}

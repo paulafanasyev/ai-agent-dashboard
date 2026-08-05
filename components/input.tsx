@@ -132,7 +132,6 @@ export const Input = ({
             disabled={isLoading}
             className="flex h-7 max-w-[190px] items-center gap-1.5 rounded-md border border-zinc-200 bg-surface py-1 pl-2 pr-1.5 text-[10px] font-medium text-zinc-600 outline-none transition-colors hover:border-zinc-300 hover:text-zinc-900 focus-visible:ring-2 focus-visible:ring-violet-400 disabled:opacity-50"
           >
-            <KeyRound className="size-3 shrink-0 text-zinc-400" />
             <span className="min-w-0 flex-1 truncate font-mono">
               {selectedProfile?.name ?? "Choose model"}
             </span>

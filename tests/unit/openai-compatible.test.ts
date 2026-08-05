@@ -103,6 +103,81 @@ describe("OpenAI-compatible request body", () => {
     });
   });
 
+  it("sends DeepSeek screenshot observations as text instead of image_url", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const requestFetch = vi.fn<typeof fetch>(async (_input, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      const firstRequest = requestBodies.length === 1;
+      return Response.json({
+        id: firstRequest ? "response-screenshot" : "response-weather",
+        model: "deepseek-v4-flash",
+        choices: [
+          {
+            index: 0,
+            finish_reason: firstRequest ? "tool_calls" : "stop",
+            message: firstRequest
+              ? {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "call_screenshot",
+                      type: "function",
+                      function: {
+                        name: "computer",
+                        arguments: JSON.stringify({ action: "screenshot" }),
+                      },
+                    },
+                  ],
+                }
+              : { role: "assistant", content: "Dubai is sunny." },
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      });
+    });
+    const model = createOpenAICompatibleModel({
+      apiKey: "sk-deepseek-test",
+      baseUrl: "https://api.deepseek.com",
+      extraBody: { thinking: { type: "disabled" } },
+      modelId: "deepseek-v4-flash",
+      providerName: "deepseek",
+      requestFetch,
+      supportsVision: false,
+    });
+
+    await generateText({
+      model,
+      prompt: "What's the weather in Dubai?",
+      maxSteps: 2,
+      tools: {
+        computer: tool({
+          parameters: z.object({ action: z.literal("screenshot") }),
+          execute: async () => ({
+            type: "image" as const,
+            data: Buffer.from("not-a-real-image").toString("base64"),
+            text: "Visible Chrome page: Dubai weather. Visible text: 35°C Sunny",
+          }),
+          experimental_toToolResultContent: (result) => [
+            { type: "image", data: result.data, mimeType: "image/png" },
+            { type: "text", text: result.text },
+          ],
+        }),
+      },
+    });
+
+    expect(requestFetch).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(requestBodies[1])).not.toContain("image_url");
+    expect(requestBodies[1]).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          content: expect.stringContaining("35°C Sunny"),
+        }),
+      ]),
+    });
+  });
+
   it("maps Kimi reasoning effort through the compatible provider", async () => {
     let requestBody: Record<string, unknown> | null = null;
     const model = createOpenAICompatibleModel({

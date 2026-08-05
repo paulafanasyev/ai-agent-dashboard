@@ -43,6 +43,7 @@ interface DashboardShellProps {
   activeSession: ChatSession | null;
   activeConversation: ChatConversation | null;
   streamUrls: Record<string, string>;
+  retainedSessionIds: string[];
   selectedEventId: string | null;
   activeEvent: AgentEvent | null;
   activityEvent: ToolEvent | null;
@@ -167,6 +168,12 @@ export function DashboardShell(props: DashboardShellProps) {
 
   const session = props.activeSession;
   const conversation = props.activeConversation;
+  const retainedSessions = props.retainedSessionIds
+    .map(
+      (sessionId) =>
+        props.sessions.find((candidate) => candidate.id === sessionId) ?? null,
+    )
+    .filter((candidate): candidate is ChatSession => candidate !== null);
   const chat = (
     <ChatWorkspace
       key={`${session.id}-${conversation.id}-${props.modelSignature}`}
@@ -198,22 +205,43 @@ export function DashboardShell(props: DashboardShellProps) {
     />
   );
   const viewer = (
-    <VncViewer
-      key={`vnc-viewer-${session.id}`}
-      sessionId={session.id}
-      sessionTitle={session.title}
-      streamUrl={props.streamUrls[session.id] ?? null}
-      sandboxId={session.sandboxId}
-      generation={session.generation}
-      connectionStatus={session.connectionStatus}
-      agentStatus={props.agentStatus}
-      activityEvent={props.activityEvent}
-      displayMode={props.vncDisplayMode}
-      showHeader={props.isDesktop}
-      onDisplayModeChange={props.onDisplayModeChange}
-      onViewerStateChange={props.onViewerStateChange}
-      onRefresh={props.onRefreshDesktop}
-    />
+    <div
+      className={cn(
+        "relative flex min-h-0",
+        props.vncDisplayMode === "embedded" ? "flex-1" : "shrink-0",
+      )}
+    >
+      {retainedSessions.map((retainedSession) => {
+        const isActive = retainedSession.id === session.id;
+        return (
+          <div
+            key={`retained-viewer-${retainedSession.id}`}
+            data-retained-desktop={retainedSession.id}
+            aria-hidden={!isActive}
+            className={cn(
+              "absolute inset-0 flex min-h-0 flex-col",
+              !isActive && "invisible pointer-events-none",
+            )}
+          >
+            <VncViewer
+              sessionId={retainedSession.id}
+              sessionTitle={retainedSession.title}
+              streamUrl={props.streamUrls[retainedSession.id] ?? null}
+              sandboxId={retainedSession.sandboxId}
+              generation={retainedSession.generation}
+              connectionStatus={retainedSession.connectionStatus}
+              agentStatus={isActive ? props.agentStatus : "idle"}
+              activityEvent={isActive ? props.activityEvent : null}
+              displayMode={isActive ? props.vncDisplayMode : "embedded"}
+              showHeader={isActive && props.isDesktop}
+              onDisplayModeChange={props.onDisplayModeChange}
+              onViewerStateChange={props.onViewerStateChange}
+              onRefresh={props.onRefreshDesktop}
+            />
+          </div>
+        );
+      })}
+    </div>
   );
 
   return (

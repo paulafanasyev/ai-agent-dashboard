@@ -131,6 +131,80 @@ test("keeps the VNC viewer mounted across the responsive breakpoint", async ({
   await expect(viewer).toHaveAttribute("data-resize-sentinel", "same-node");
 });
 
+test("keeps the three most recent Desktop viewers mounted while switching", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile-chromium",
+    "The Desktop rail gives this retention test deterministic session controls.",
+  );
+  await page.addInitScript(
+    ({ completedTutorialKey, sessionsKey, activeSessionKey }) => {
+      const now = Date.now();
+      const sessions = [1, 2, 3, 4].map((number) => {
+        const sessionId = `desktop-${number}`;
+        const conversationId = `conversation-${number}`;
+        return {
+          id: sessionId,
+          title: `Desktop ${number}`,
+          pinned: false,
+          createdAt: now,
+          updatedAt: now,
+          sandboxId: null,
+          generation: 0,
+          runtimeEvents: [],
+          activeConversationId: conversationId,
+          conversations: [
+            {
+              id: conversationId,
+              title: "New conversation",
+              createdAt: now,
+              updatedAt: now,
+              revision: 0,
+              apiConfigId: null,
+              messages: [],
+              events: [],
+              queuedPrompts: [],
+            },
+          ],
+        };
+      });
+      localStorage.setItem(completedTutorialKey, "complete");
+      localStorage.setItem(sessionsKey, JSON.stringify(sessions));
+      localStorage.setItem(activeSessionKey, "desktop-1");
+    },
+    {
+      completedTutorialKey: tutorialKey,
+      sessionsKey: "ai-agent-dashboard:sessions:v2",
+      activeSessionKey: "ai-agent-dashboard:active-session",
+    },
+  );
+  await page.goto("/");
+
+  const retainedViewer = (sessionId: string) =>
+    page.locator(`[data-retained-desktop="${sessionId}"]`);
+  await expect(retainedViewer("desktop-1")).toHaveCount(1);
+  await retainedViewer("desktop-1").evaluate((element) =>
+    element.setAttribute("data-retention-sentinel", "same-node"),
+  );
+
+  await page.getByRole("button", { name: "Switch to Desktop 2" }).click();
+  await page.getByRole("button", { name: "Switch to Desktop 3" }).click();
+  await expect(page.locator("[data-retained-desktop]")).toHaveCount(3);
+  await expect(retainedViewer("desktop-1")).toHaveAttribute(
+    "data-retention-sentinel",
+    "same-node",
+  );
+
+  await page.getByRole("button", { name: "Switch to Desktop 4" }).click();
+  await expect(page.locator("[data-retained-desktop]")).toHaveCount(3);
+  await expect(retainedViewer("desktop-1")).toHaveCount(0);
+  await expect(retainedViewer("desktop-4")).toHaveAttribute(
+    "aria-hidden",
+    "false",
+  );
+});
+
 test("unconfigured composer links to API settings through a notification", async ({
   page,
 }) => {
@@ -382,7 +456,51 @@ test("runs VNC diagnostics without exposing infrastructure secrets", async ({
 test("manages multiple API configurations and selects one per conversation", async ({
   page,
 }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "complete"), tutorialKey);
+  await page.addInitScript(
+    ({ completedTutorialKey, sessionsKey }) => {
+      const now = Date.now();
+      localStorage.setItem(completedTutorialKey, "complete");
+      localStorage.setItem(
+        sessionsKey,
+        JSON.stringify([
+          {
+            id: "desktop-model-config",
+            title: "Desktop 1",
+            pinned: false,
+            createdAt: now,
+            updatedAt: now,
+            sandboxId: null,
+            generation: 0,
+            runtimeEvents: [],
+            activeConversationId: "conversation-model-config",
+            conversations: [
+              {
+                id: "conversation-model-config",
+                title: "Existing conversation",
+                createdAt: now,
+                updatedAt: now,
+                revision: 0,
+                apiConfigId: null,
+                messages: [
+                  {
+                    id: "seed-message",
+                    role: "user",
+                    parts: [{ type: "text", text: "Keep this model" }],
+                  },
+                ],
+                events: [],
+                queuedPrompts: [],
+              },
+            ],
+          },
+        ]),
+      );
+    },
+    {
+      completedTutorialKey: tutorialKey,
+      sessionsKey: "ai-agent-dashboard:sessions:v2",
+    },
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Open settings" }).click();
 
@@ -412,6 +530,10 @@ test("manages multiple API configurations and selects one per conversation", asy
   await expect(
     page.getByRole("button", { name: "Edit claude-test-model" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Set default" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Default", { exact: true })).toHaveCount(0);
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -439,10 +561,18 @@ test("manages multiple API configurations and selects one per conversation", asy
   await deepSeekDialog
     .getByRole("button", { name: "Add configuration" })
     .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .not.toContain("defaultConfigId");
 
   await page.getByRole("button", { name: "Close settings" }).click();
   const modelButton = page.getByRole("button", { name: "Choose model" });
   await expect(modelButton).toContainText("claude-test-model");
+  await expect(modelButton.locator("svg")).toHaveCount(1);
   await expect(page.locator("form select")).toHaveCount(0);
   await modelButton.click();
   const modelMenu = page.getByRole("listbox", { name: "Models" });
@@ -469,6 +599,32 @@ test("manages multiple API configurations and selects one per conversation", asy
       }),
     )
     .toBe(true);
+
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const profiles = JSON.parse(
+          sessionStorage.getItem("ai-agent-dashboard:api-configs:v1") ?? "{}",
+        ).profiles ?? [];
+        const selectedId = profiles.find(
+          (profile: { config: { modelId: string } }) =>
+            profile.config.modelId === "deepseek-v4-flash",
+        )?.id;
+        const sessions = JSON.parse(
+          localStorage.getItem("ai-agent-dashboard:sessions:v2") ?? "[]",
+        );
+        const activeConversation = sessions[0]?.conversations.find(
+          (conversation: { id: string }) =>
+            conversation.id === sessions[0]?.activeConversationId,
+        );
+        return {
+          conversationCount: sessions[0]?.conversations.length,
+          selectedModelPreserved: activeConversation?.apiConfigId === selectedId,
+        };
+      }),
+    )
+    .toEqual({ conversationCount: 2, selectedModelPreserved: true });
 
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Edit deepseek-v4-flash" }).click();

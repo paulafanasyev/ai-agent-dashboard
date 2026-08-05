@@ -14,6 +14,7 @@ const computerActionLabels: Record<string, string> = {
   middle_click: "Middle-clicking",
   triple_click: "Triple-clicking",
   mouse_move: "Moving the pointer",
+  navigate: "Navigating in the visible browser",
   type: "Typing into the desktop",
   key: "Sending a keyboard shortcut",
   scroll: "Scrolling the page",
@@ -60,7 +61,7 @@ export function describeAgentEvent(event: AgentEvent) {
     ? `Position (${coordinate[0]}, ${coordinate[1]})`
     : null;
   const detail =
-    event.action === "type" && event.payload.text
+    (event.action === "type" || event.action === "navigate") && event.payload.text
       ? truncate(event.payload.text)
       : event.action === "scroll" && event.payload.scrollDirection
         ? `${event.payload.scrollDirection} ${event.payload.scrollAmount ?? ""}`.trim()

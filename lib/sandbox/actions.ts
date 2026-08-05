@@ -28,6 +28,7 @@ export const computerInputSchema = z.object({
     "double_click",
     "right_click",
     "mouse_move",
+    "navigate",
     "type",
     "key",
     "scroll",
@@ -50,8 +51,123 @@ export const computerInputSchema = z.object({
 export type ComputerActionInput = z.infer<typeof computerInputSchema>;
 
 export type ComputerActionResult =
-  | { type: "image"; data: string }
+  | { type: "image"; data: string; text?: string }
   | { type: "text"; text: string };
+
+interface ComputerActionOptions {
+  includeScreenText?: boolean;
+}
+
+const READ_VISIBLE_CHROME_SCRIPT = String.raw`
+const targets = await (await fetch("http://127.0.0.1:9222/json/list")).json();
+const target = targets.find((candidate) => candidate.type === "page");
+if (!target?.webSocketDebuggerUrl) throw new Error("Visible Chrome page is unavailable");
+
+const socket = new WebSocket(target.webSocketDebuggerUrl);
+const pending = new Map();
+let requestId = 0;
+socket.addEventListener("message", (event) => {
+  const message = JSON.parse(String(event.data));
+  const callback = pending.get(message.id);
+  if (!callback) return;
+  pending.delete(message.id);
+  if (message.error) callback.reject(new Error(message.error.message));
+  else callback.resolve(message.result);
+});
+await new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error("Chrome connection timed out")), 3000);
+  socket.addEventListener("open", () => {
+    clearTimeout(timer);
+    resolve();
+  }, { once: true });
+  socket.addEventListener("error", () => {
+    clearTimeout(timer);
+    reject(new Error("Chrome connection failed"));
+  }, { once: true });
+});
+
+const send = (method, params = {}) => new Promise((resolve, reject) => {
+  const id = ++requestId;
+  pending.set(id, { resolve, reject });
+  socket.send(JSON.stringify({ id, method, params }));
+});
+const browserObservation = () => {
+  const inViewport = (rect) => rect.width > 0 && rect.height > 0 &&
+    rect.bottom > 0 && rect.right > 0 &&
+    rect.top < window.innerHeight && rect.left < window.innerWidth;
+  const isVisible = (element) => {
+    const style = getComputedStyle(element);
+    return style.visibility !== "hidden" && style.display !== "none" &&
+      Number(style.opacity || "1") > 0 && inViewport(element.getBoundingClientRect());
+  };
+  const lines = [];
+  const seen = new Set();
+  const add = (value) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    lines.push(text);
+  };
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+    if (!parent || !isVisible(parent)) continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    if ([...range.getClientRects()].some(inViewport)) add(node.textContent);
+  }
+  const controls = [];
+  for (const element of document.querySelectorAll("a,button,input,textarea,select,[role=button],[role=link],[role=textbox]")) {
+    if (!isVisible(element)) continue;
+    const rect = element.getBoundingClientRect();
+    const label = element.getAttribute("aria-label") || element.getAttribute("placeholder") ||
+      element.innerText || element.value || element.getAttribute("title") || element.tagName.toLowerCase();
+    const text = String(label || "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    controls.push("[" + (element.getAttribute("role") || element.tagName.toLowerCase()) + "] " + text + " @ (" + Math.round(rect.left + rect.width / 2) + ", " + Math.round(rect.top + rect.height / 2) + ")");
+  }
+  return {
+    title: document.title,
+    url: location.href,
+    text: lines.slice(0, 240),
+    controls: controls.slice(0, 120),
+  };
+};
+const expression = "(" + browserObservation.toString() + ")()";
+const result = await send("Runtime.evaluate", {
+  expression,
+  returnByValue: true,
+  awaitPromise: true,
+});
+socket.close();
+const observation = result?.result?.value;
+if (!observation) throw new Error("Chrome returned no visible-page observation");
+const output = [
+  "Visible Chrome page: " + (observation.title || "Untitled"),
+  "URL: " + (observation.url || "unknown"),
+  "Visible text:",
+  ...(observation.text?.length ? observation.text : ["(No readable page text)"]),
+  "Visible controls:",
+  ...(observation.controls?.length ? observation.controls : ["(No page controls detected)"]),
+].join("\n");
+console.log(output.slice(0, 16000));
+`;
+
+/** Reads text and actionable controls from the same visible Chrome page shown through noVNC. */
+async function readVisibleChromePage(
+  sandbox: Awaited<ReturnType<typeof getReadyDesktop>>,
+) {
+  const result = await sandbox.runCommand({
+    cmd: "node",
+    args: ["--input-type=module", "-e", READ_VISIBLE_CHROME_SCRIPT],
+  });
+  if (result.exitCode !== 0) {
+    const detail = (await result.stderr()).trim();
+    return `Visible Chrome page text is unavailable${detail ? `: ${detail}` : "."}`;
+  }
+  return (await result.stdout()).trim() || "Visible Chrome page has no readable text.";
+}
 
 const keyMap: Record<string, string> = {
   Return: "Return",
@@ -106,6 +222,7 @@ function mapKey(key: string): string {
 export async function executeComputerAction(
   sandboxId: string,
   input: ComputerActionInput,
+  options: ComputerActionOptions = {},
 ): Promise<ComputerActionResult> {
   const sandbox = await getReadyDesktop(sandboxId);
   const {
@@ -129,11 +246,16 @@ export async function executeComputerAction(
         path: "/tmp/screenshot.png",
       });
       if (!buffer) throw new Error("Failed to read screenshot");
-      return { type: "image", data: buffer.toString("base64") };
+      return {
+        type: "image",
+        data: buffer.toString("base64"),
+        text: options.includeScreenText
+          ? await readVisibleChromePage(sandbox)
+          : undefined,
+      };
     }
     case "wait": {
-      if (!duration) throw new Error("Duration required for wait action");
-      const actualDuration = Math.min(duration, 2);
+      const actualDuration = Math.min(duration ?? 1, 2);
       await wait(actualDuration);
       return { type: "text", text: `Waited for ${actualDuration} seconds` };
     }
@@ -178,6 +300,28 @@ export async function executeComputerAction(
         env: DISPLAY_ENV,
       });
       return { type: "text", text: `Moved mouse to ${x}, ${y}` };
+    }
+    case "navigate": {
+      if (!text) throw new Error("URL or search text required for navigate action");
+      // Keep the three xdotool operations separate: `type` accepts trailing
+      // positional arguments, so one chained invocation can swallow `key Return`
+      // as literal text instead of submitting the omnibox.
+      await sandbox.runCommand({
+        cmd: "xdotool",
+        args: ["key", "ctrl+l"],
+        env: DISPLAY_ENV,
+      });
+      await sandbox.runCommand({
+        cmd: "xdotool",
+        args: ["type", "--clearmodifiers", text],
+        env: DISPLAY_ENV,
+      });
+      await sandbox.runCommand({
+        cmd: "xdotool",
+        args: ["key", "Return"],
+        env: DISPLAY_ENV,
+      });
+      return { type: "text", text: `Navigated to: ${text}` };
     }
     case "type": {
       if (!text) throw new Error("Text required for type action");
