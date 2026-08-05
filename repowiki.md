@@ -25,7 +25,7 @@ The repository extends the Vercel Labs AI SDK Computer Use starter with:
 - A collapsible event timeline and derived activity counters.
 - Browser-local desktop sessions with multiple conversations per desktop.
 - Memoized VNC rendering isolated from streaming chat updates.
-- Local Project Claude plus multiple hosted BYOK profiles for Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible models.
+- Local Project Claude plus multiple hosted BYOK profiles for Anthropic, Kimi, DeepSeek, and custom OpenAI-compatible models, each with an editable endpoint.
 - Per-conversation model selection and configurable DeepSeek Thinking mode with tool-call reasoning replay.
 - Live, observable activity feedback while the agent is working.
 - Persistent FIFO follow-up queues scoped to individual conversations.
@@ -125,7 +125,7 @@ components/
     tool-inspector.tsx           Expanded event details
     vnc-viewer.tsx               Memoized noVNC iframe
   settings/
-    api-settings.tsx             Saved API profile cards and add/edit dialog
+    api-settings.tsx             API profiles and per-provider endpoint editor
     data-settings.tsx            Confirmed local-data cleanup
     vnc-diagnostics-settings.tsx Server-backed runtime diagnostics
   ui/                            Shared shadcn-style primitives
@@ -139,9 +139,9 @@ components/
 
 lib/
   ai/
-    anthropic.ts                 Anthropic provider configuration
-    kimi.ts                      OpenAI-compatible model and image middleware
-    model-config.ts              Model configuration types and validation helpers
+    anthropic.ts                 Project and BYOK Anthropic provider factories
+    kimi.ts                      Configurable compatible models and image middleware
+    model-config.ts              Provider endpoints, validation, and migration
   dashboard/
     events.ts                    Tool/runtime event normalization and derived state
     presentation.ts              Stable labels and presentation keys
@@ -212,11 +212,11 @@ scrollable column.
 add/edit dialog. Local development can include Project Claude, while hosted
 builds use user-created Anthropic, Kimi, DeepSeek, or custom compatible profiles.
 Each saved configuration is named by its model ID, can be edited or deleted, and
-one can be marked as the default. The custom model listbox beside the composer
-selects a profile per conversation without exposing a native browser select.
-Invalid drafts remain inside the editor and never replace a saved profile. API
-fields are locked during an active agent run, but theme selection remains
-available.
+stores its own editable Base URL. The first profile in list order is the implicit
+fallback; the custom model listbox beside the composer selects a profile per
+conversation without exposing a native browser select. Invalid drafts remain
+inside the editor and never replace a saved profile. API fields are locked
+during an active agent run, but theme selection remains available.
 
 ### Responsive composition
 
@@ -422,17 +422,20 @@ type ClientModelConfig =
   | {
       provider: "anthropic-byok";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
     }
   | {
       provider: "kimi";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
       reasoningEffort: "low" | "high" | "max";
     }
   | {
       provider: "deepseek";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
       thinkingMode: "disabled" | "enabled";
     }
@@ -455,13 +458,17 @@ type ClientModelConfig =
 
 ### Anthropic BYOK path
 
-- Uses the official Anthropic Messages API with the visitor's tab-scoped key.
+- Defaults to the official Anthropic Messages API prefix
+  `https://api.anthropic.com/v1`, while allowing the Base URL to be edited for
+  compatible gateways.
+- Uses the visitor's tab-scoped key and the saved Base URL for each request.
 - Accepts a configurable Claude model ID.
 - Uses the same native computer-use and Bash tool definitions as Project Claude.
 
 ### Kimi preset
 
-- Uses the Kimi Code OpenAI-compatible endpoint `https://api.kimi.com/coding/v1`.
+- Defaults to the Kimi Code OpenAI-compatible endpoint
+  `https://api.kimi.com/coding/v1`; the Base URL remains editable.
 - Defaults to model ID `k3`, which remains editable in the UI.
 - Accepts a Kimi Code membership API key stored only in the current browser tab.
 - Uses generic AI SDK function tools instead of Anthropic-native schemas.
@@ -470,8 +477,8 @@ type ClientModelConfig =
 
 ### DeepSeek preset
 
-- Uses the official `https://api.deepseek.com` endpoint and defaults to
-  `deepseek-v4-flash`.
+- Defaults to the official `https://api.deepseek.com` endpoint and model
+  `deepseek-v4-flash`; the Base URL remains editable.
 - Defaults Thinking mode to `disabled` for the most reliable multi-step Desktop
   automation.
 - When Thinking is enabled, omits `tool_choice` entirely because DeepSeek rejects
@@ -490,11 +497,28 @@ type ClientModelConfig =
 
 ### Custom path
 
-- Accepts a public HTTPS OpenAI-compatible Base URL.
+- Starts without a default endpoint and requires a public HTTPS
+  OpenAI-compatible Base URL.
 - Requires an API key and model ID.
 - Rejects localhost, private IPv4 ranges, and literal IPv6 hosts before the
   request reaches the provider factory.
 - Uses the same generic computer and Bash tools as Kimi.
+
+### Base URL lifecycle
+
+- The API configuration editor exposes the same editable Base URL control for
+  Anthropic BYOK, Kimi, DeepSeek, and custom compatible profiles.
+- Provider changes reset the field to that provider's official default; custom
+  compatible profiles reset it to an empty value.
+- Saving removes trailing slashes, validates the endpoint, persists it with the
+  tab-scoped profile, and includes it in the model endpoint signature so an
+  edited endpoint cannot reuse a chat controller bound to the previous URL.
+- Stored Anthropic, Kimi, and DeepSeek profiles created before `baseUrl` existed
+  are migrated to their official defaults. Legacy custom DeepSeek profiles keep
+  their configured endpoint when promoted to the first-class DeepSeek variant.
+- `/api/chat` repeats validation and passes the saved Base URL into the selected
+  Anthropic or OpenAI-compatible provider factory. Project Claude remains
+  server-owned through `ANTHROPIC_BASE_URL`.
 
 ### Screenshot middleware
 
@@ -694,12 +718,13 @@ storage. This avoids exceeding browser storage quotas with base64 image data.
 - Keys are never copied into session history or rendered in the event inspector.
 - Users should only enter a key on a deployment whose operator they trust.
 
-### Custom endpoint validation
+### Provider endpoint validation
 
-The client and server both use the same Base URL validation helper. It requires
-HTTPS and blocks obvious loopback and private network destinations. This reduces
-server-side request-forgery exposure, though production deployments should also
-enforce outbound network policy and DNS-level protections.
+The client and server use the same validation helper for every browser-editable
+Provider Base URL. It requires HTTPS and blocks obvious loopback and private
+network destinations. This reduces server-side request-forgery exposure, though
+production deployments should also enforce outbound network policy and
+DNS-level protections.
 
 ## 14. UI Responsibility Map
 
@@ -714,7 +739,7 @@ enforce outbound network policy and DNS-level protections.
 | Debug panel | `debug-panel.tsx` | Event store timeline and action counts |
 | Remote desktop | `vnc-viewer.tsx` | noVNC connection and reconnect status |
 | Tool inspector | `tool-inspector.tsx` | Full screenshot, command output, action details, JSON copy |
-| Unified settings | `model-settings.tsx` + `settings/api-settings.tsx` | Saved API profiles, DeepSeek Thinking, VNC diagnostics, data, tutorial, and themes |
+| Unified settings | `model-settings.tsx` + `settings/api-settings.tsx` | Saved API profiles, editable per-provider Base URLs, DeepSeek Thinking, VNC diagnostics, data, tutorial, and themes |
 
 ## 15. API Surface
 
@@ -825,7 +850,7 @@ Current automated coverage includes:
 - Session serialization and runtime-event persistence tests.
 - First-open tutorial persistence and Settings replay in Chromium.
 - Sequential Desktop creation plus conversation edit/delete behavior.
-- Multi-profile API CRUD, per-conversation model selection, and DeepSeek Thinking persistence.
+- Multi-profile API CRUD, per-conversation model selection, editable Base URLs for all BYOK providers, legacy endpoint migration, and DeepSeek Thinking persistence.
 - DeepSeek request-body injection, provider-aware `tool_choice`, and
   `reasoning_content` replay after a tool call.
 - DeepSeek text-only screenshot bridging and compatible tool-call repair.

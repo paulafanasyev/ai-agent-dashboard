@@ -16,9 +16,8 @@ import {
 } from "@/lib/ai/kimi";
 import { repairCompatibleToolCall } from "@/lib/ai/tool-call-repair";
 import {
-  DEEPSEEK_BASE_URL,
   deepSeekThinkingMode,
-  isSafeCustomBaseUrl,
+  isSafeProviderBaseUrl,
 } from "@/lib/ai/model-config";
 import { getServerModelCapabilities } from "@/lib/ai/runtime-policy";
 import { checkDesktopHealth } from "@/lib/sandbox/utils";
@@ -37,24 +36,27 @@ const modelConfigSchema = z.discriminatedUnion("provider", [
   z.object({
     provider: z.literal("anthropic-byok"),
     apiKey: z.string().trim().min(8).max(512),
+    baseUrl: z.string().trim().max(2048).refine(isSafeProviderBaseUrl),
     modelId: z.string().trim().min(1).max(200),
   }),
   z.object({
     provider: z.literal("kimi"),
     apiKey: z.string().trim().min(8).max(512),
+    baseUrl: z.string().trim().max(2048).refine(isSafeProviderBaseUrl),
     modelId: z.string().trim().min(1).max(200),
     reasoningEffort: z.enum(["low", "high", "max"]),
   }),
   z.object({
     provider: z.literal("deepseek"),
     apiKey: z.string().trim().min(8).max(512),
+    baseUrl: z.string().trim().max(2048).refine(isSafeProviderBaseUrl),
     modelId: z.string().trim().min(1).max(200),
     thinkingMode: z.enum(["disabled", "enabled"]).default("disabled"),
   }),
   z.object({
     provider: z.literal("custom"),
     apiKey: z.string().trim().min(8).max(512),
-    baseUrl: z.string().trim().max(2048).refine(isSafeCustomBaseUrl),
+    baseUrl: z.string().trim().max(2048).refine(isSafeProviderBaseUrl),
     modelId: z.string().trim().min(1).max(200),
   }),
 ]);
@@ -112,13 +114,21 @@ export async function POST(req: Request) {
 
     const model =
       modelConfig.provider === "kimi"
-        ? createKimiModel(modelConfig.apiKey, modelConfig.modelId)
+        ? createKimiModel(
+            modelConfig.apiKey,
+            modelConfig.modelId,
+            modelConfig.baseUrl,
+          )
         : modelConfig.provider === "anthropic-byok"
-          ? createAnthropicByokModel(modelConfig.apiKey, modelConfig.modelId)
+          ? createAnthropicByokModel(
+              modelConfig.apiKey,
+              modelConfig.modelId,
+              modelConfig.baseUrl,
+            )
         : modelConfig.provider === "deepseek"
           ? createOpenAICompatibleModel({
               apiKey: modelConfig.apiKey,
-              baseUrl: DEEPSEEK_BASE_URL,
+              baseUrl: modelConfig.baseUrl,
               extraBody: {
                 thinking: { type: modelConfig.thinkingMode },
               },

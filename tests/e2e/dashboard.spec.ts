@@ -272,6 +272,13 @@ test("migrates the previous single API setting and labels it by model ID", async
   await expect
     .poll(() =>
       page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .toContain('"baseUrl":"https://api.kimi.com/coding/v1"');
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
         sessionStorage.getItem("ai-agent-dashboard:model-config"),
       ),
     )
@@ -528,8 +535,19 @@ test("manages multiple API configurations and selects one per conversation", asy
     "DeepSeek",
     "OpenAI-compatible",
   ]);
+  const baseUrl = addDialog.getByLabel("Base URL");
+  await expect(baseUrl).toHaveValue("https://api.anthropic.com/v1");
+  await provider.selectOption("kimi");
+  await expect(baseUrl).toHaveValue("https://api.kimi.com/coding/v1");
+  await provider.selectOption("deepseek");
+  await expect(baseUrl).toHaveValue("https://api.deepseek.com");
+  await provider.selectOption("custom");
+  await expect(baseUrl).toHaveValue("");
+  await provider.selectOption("anthropic-byok");
+  await expect(baseUrl).toHaveValue("https://api.anthropic.com/v1");
 
   await addDialog.locator("#byok-api-key").fill("sk-ant-e2e-browser-only");
+  await baseUrl.fill("https://anthropic.example.com/v1/");
   await addDialog.getByLabel("Model ID").fill("claude-test-model");
   await addDialog
     .getByRole("button", { name: "Add configuration" })
@@ -550,6 +568,13 @@ test("manages multiple API configurations and selects one per conversation", asy
     )
     .toContain('"provider":"anthropic-byok"');
   await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .toContain('"baseUrl":"https://anthropic.example.com/v1"');
+  await expect
     .poll(() => page.evaluate(() => JSON.stringify(localStorage)))
     .not.toContain("sk-ant-e2e-browser-only");
 
@@ -560,6 +585,12 @@ test("manages multiple API configurations and selects one per conversation", asy
   const deepSeekProvider = deepSeekDialog.getByLabel("Provider");
   await deepSeekProvider.selectOption("deepseek");
   await deepSeekDialog.locator("#byok-api-key").fill("sk-deepseek-e2e-only");
+  await expect(deepSeekDialog.getByLabel("Base URL")).toHaveValue(
+    "https://api.deepseek.com",
+  );
+  await deepSeekDialog
+    .getByLabel("Base URL")
+    .fill("https://deepseek.example.com/v1");
   await expect(deepSeekDialog.getByLabel("Model ID")).toHaveValue(
     "deepseek-v4-flash",
   );
@@ -576,6 +607,13 @@ test("manages multiple API configurations and selects one per conversation", asy
       ),
     )
     .not.toContain("defaultConfigId");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("ai-agent-dashboard:api-configs:v1"),
+      ),
+    )
+    .toContain('"baseUrl":"https://deepseek.example.com/v1"');
 
   await page.getByRole("button", { name: "Close settings" }).click();
   const modelButton = page.getByRole("button", { name: "Choose model" });

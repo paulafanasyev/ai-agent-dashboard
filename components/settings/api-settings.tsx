@@ -21,21 +21,20 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  DEEPSEEK_BASE_URL,
   DEFAULT_ANTHROPIC_MODEL_ID,
   DEFAULT_DEEPSEEK_MODEL_ID,
   DEFAULT_KIMI_MODEL_ID,
-  KIMI_BASE_URL,
-  isSafeCustomBaseUrl,
+  defaultProviderBaseUrl,
+  isSafeProviderBaseUrl,
   modelProviderLabel,
+  normalizeProviderBaseUrl,
   type ApiConfigProfile,
   type ClientModelConfig,
   type DeepSeekThinkingMode,
+  type EditableModelProvider,
   type KimiReasoningEffort,
 } from "@/lib/ai/model-config";
 import { cn } from "@/lib/utils";
-
-type EditableProvider = "anthropic-byok" | "kimi" | "deepseek" | "custom";
 
 interface ApiSettingsProps {
   profiles: ApiConfigProfile[];
@@ -242,7 +241,7 @@ function ApiConfigEditorDialog({
   onSave: (profile: ApiConfigProfile) => void;
 }) {
   const config = profile?.config;
-  const [provider, setProvider] = useState<EditableProvider>(
+  const [provider, setProvider] = useState<EditableModelProvider>(
     config?.provider ?? "anthropic-byok",
   );
   const [apiKey, setApiKey] = useState(config?.apiKey ?? "");
@@ -250,7 +249,7 @@ function ApiConfigEditorDialog({
     config?.modelId ?? DEFAULT_ANTHROPIC_MODEL_ID,
   );
   const [baseUrl, setBaseUrl] = useState(
-    config?.provider === "custom" ? config.baseUrl : "",
+    config?.baseUrl ?? defaultProviderBaseUrl("anthropic-byok"),
   );
   const [reasoningEffort, setReasoningEffort] =
     useState<KimiReasoningEffort>(
@@ -273,9 +272,10 @@ function ApiConfigEditorDialog({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [onCancel]);
 
-  const changeProvider = (nextProvider: EditableProvider) => {
+  const changeProvider = (nextProvider: EditableModelProvider) => {
     setProvider(nextProvider);
     setError(null);
+    setBaseUrl(defaultProviderBaseUrl(nextProvider));
     if (nextProvider === "anthropic-byok") setModelId(DEFAULT_ANTHROPIC_MODEL_ID);
     if (nextProvider === "kimi") setModelId(DEFAULT_KIMI_MODEL_ID);
     if (nextProvider === "deepseek") setModelId(DEFAULT_DEEPSEEK_MODEL_ID);
@@ -293,12 +293,12 @@ function ApiConfigEditorDialog({
       setError("Enter a model ID.");
       return null;
     }
+    const trimmedBaseUrl = normalizeProviderBaseUrl(baseUrl);
+    if (!isSafeProviderBaseUrl(trimmedBaseUrl)) {
+      setError("Enter a public HTTPS Base URL.");
+      return null;
+    }
     if (provider === "custom") {
-      const trimmedBaseUrl = baseUrl.trim().replace(/\/$/, "");
-      if (!isSafeCustomBaseUrl(trimmedBaseUrl)) {
-        setError("Enter a public HTTPS Base URL.");
-        return null;
-      }
       return {
         provider,
         apiKey: trimmedKey,
@@ -310,6 +310,7 @@ function ApiConfigEditorDialog({
       return {
         provider,
         apiKey: trimmedKey,
+        baseUrl: trimmedBaseUrl,
         modelId: trimmedModel,
         reasoningEffort,
       };
@@ -318,11 +319,17 @@ function ApiConfigEditorDialog({
       return {
         provider,
         apiKey: trimmedKey,
+        baseUrl: trimmedBaseUrl,
         modelId: trimmedModel,
         thinkingMode: deepSeekThinking,
       };
     }
-    return { provider, apiKey: trimmedKey, modelId: trimmedModel };
+    return {
+      provider,
+      apiKey: trimmedKey,
+      baseUrl: trimmedBaseUrl,
+      modelId: trimmedModel,
+    };
   };
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -335,13 +342,6 @@ function ApiConfigEditorDialog({
       config: nextConfig,
     });
   };
-
-  const fixedBaseUrl =
-    provider === "kimi"
-      ? KIMI_BASE_URL
-      : provider === "deepseek"
-        ? DEEPSEEK_BASE_URL
-        : null;
 
   return (
     <div
@@ -384,7 +384,7 @@ function ApiConfigEditorDialog({
                 aria-label="Provider"
                 value={provider}
                 onChange={(event) =>
-                  changeProvider(event.target.value as EditableProvider)
+                  changeProvider(event.target.value as EditableModelProvider)
                 }
                 className="flex h-9 w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 text-xs text-zinc-900 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-violet-400"
               >
@@ -424,38 +424,22 @@ function ApiConfigEditorDialog({
               </div>
             </div>
 
-            {fixedBaseUrl ? (
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>
-                  {provider === "kimi" ? "Kimi" : "DeepSeek"} Base URL
-                </Label>
-                <div className="flex h-9 items-center truncate rounded-md border border-zinc-200 bg-zinc-50 px-3 font-mono text-xs text-zinc-600">
-                  {fixedBaseUrl}
-                </div>
+                <Label htmlFor="provider-base-url">Base URL</Label>
+                <Input
+                  id="provider-base-url"
+                  type="url"
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                  placeholder={
+                    defaultProviderBaseUrl(provider) ||
+                    "https://example.com/v1"
+                  }
+                  spellCheck={false}
+                  className="font-mono"
+                />
               </div>
-            ) : null}
-
-            <div
-              className={cn(
-                "grid gap-3",
-                provider === "custom" || provider === "kimi"
-                  ? "sm:grid-cols-2"
-                  : "grid-cols-1",
-              )}
-            >
-              {provider === "custom" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="custom-base-url">Base URL</Label>
-                  <Input
-                    id="custom-base-url"
-                    type="url"
-                    value={baseUrl}
-                    onChange={(event) => setBaseUrl(event.target.value)}
-                    placeholder="https://example.com/v1"
-                    spellCheck={false}
-                  />
-                </div>
-              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="api-model-id">Model ID</Label>
                 <Input

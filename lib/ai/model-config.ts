@@ -6,12 +6,18 @@
 export const DEFAULT_KIMI_MODEL_ID = "k3";
 export const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5-20250929";
 export const DEFAULT_DEEPSEEK_MODEL_ID = "deepseek-v4-flash";
+export const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
 export const KIMI_BASE_URL = "https://api.kimi.com/coding/v1";
 export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 export const PROJECT_CLAUDE_CONFIG_ID = "project-claude";
 
 export type KimiReasoningEffort = "low" | "high" | "max";
 export type DeepSeekThinkingMode = "disabled" | "enabled";
+export type EditableModelProvider =
+  | "anthropic-byok"
+  | "kimi"
+  | "deepseek"
+  | "custom";
 
 export type ClientModelConfig =
   | {
@@ -20,17 +26,20 @@ export type ClientModelConfig =
   | {
       provider: "anthropic-byok";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
     }
   | {
       provider: "kimi";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
       reasoningEffort: KimiReasoningEffort;
     }
   | {
       provider: "deepseek";
       apiKey: string;
+      baseUrl: string;
       modelId: string;
       thinkingMode: DeepSeekThinkingMode;
     }
@@ -87,7 +96,7 @@ export function isDeepSeekThinkingMode(
  * Accepts only public HTTPS provider endpoints and rejects obvious loopback/private targets.
  * This is a validation layer, not a replacement for deployment-level outbound network policy.
  */
-export function isSafeCustomBaseUrl(value: string) {
+export function isSafeProviderBaseUrl(value: string) {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
@@ -124,6 +133,26 @@ export function isSafeCustomBaseUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+/** Returns the official endpoint used when creating or migrating a provider profile. */
+export function defaultProviderBaseUrl(provider: EditableModelProvider) {
+  if (provider === "anthropic-byok") return ANTHROPIC_BASE_URL;
+  if (provider === "kimi") return KIMI_BASE_URL;
+  if (provider === "deepseek") return DEEPSEEK_BASE_URL;
+  return "";
+}
+
+/** Normalizes a validated provider endpoint so signatures and persisted values stay stable. */
+export function normalizeProviderBaseUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function parseProviderBaseUrl(value: unknown, fallback?: string) {
+  const candidate = value === undefined ? fallback : value;
+  if (typeof candidate !== "string") return null;
+  const normalized = normalizeProviderBaseUrl(candidate);
+  return isSafeProviderBaseUrl(normalized) ? normalized : null;
 }
 
 /** Detects both first-class and legacy custom profiles that target DeepSeek's official API. */
@@ -180,9 +209,15 @@ export function parseStoredModelConfig(
     typeof candidate.modelId === "string" &&
     candidate.modelId.trim().length > 0
   ) {
+    const baseUrl = parseProviderBaseUrl(
+      candidate.baseUrl,
+      ANTHROPIC_BASE_URL,
+    );
+    if (!baseUrl) return null;
     return {
       provider: "anthropic-byok",
       apiKey: candidate.apiKey,
+      baseUrl,
       modelId: candidate.modelId.trim(),
     };
   }
@@ -193,9 +228,12 @@ export function parseStoredModelConfig(
     typeof candidate.reasoningEffort === "string" &&
     isKimiReasoningEffort(candidate.reasoningEffort)
   ) {
+    const baseUrl = parseProviderBaseUrl(candidate.baseUrl, KIMI_BASE_URL);
+    if (!baseUrl) return null;
     return {
       provider: "kimi",
       apiKey: candidate.apiKey,
+      baseUrl,
       modelId:
         typeof candidate.modelId === "string" && candidate.modelId.trim()
           ? candidate.modelId.trim()
@@ -210,9 +248,15 @@ export function parseStoredModelConfig(
     typeof candidate.modelId === "string" &&
     candidate.modelId.trim().length > 0
   ) {
+    const baseUrl = parseProviderBaseUrl(
+      candidate.baseUrl,
+      DEEPSEEK_BASE_URL,
+    );
+    if (!baseUrl) return null;
     return {
       provider: "deepseek",
       apiKey: candidate.apiKey,
+      baseUrl,
       modelId: candidate.modelId.trim(),
       thinkingMode:
         typeof candidate.thinkingMode === "string" &&
@@ -225,15 +269,15 @@ export function parseStoredModelConfig(
   if (
     candidate.provider === "custom" &&
     typeof candidate.apiKey === "string" &&
-    typeof candidate.baseUrl === "string" &&
-    isSafeCustomBaseUrl(candidate.baseUrl) &&
     typeof candidate.modelId === "string" &&
     candidate.modelId.trim().length > 0
   ) {
+    const baseUrl = parseProviderBaseUrl(candidate.baseUrl);
+    if (!baseUrl) return null;
     const customConfig: Extract<ClientModelConfig, { provider: "custom" }> = {
       provider: "custom",
       apiKey: candidate.apiKey,
-      baseUrl: candidate.baseUrl.trim(),
+      baseUrl,
       modelId: candidate.modelId.trim(),
     };
 
@@ -243,6 +287,7 @@ export function parseStoredModelConfig(
       return {
         provider: "deepseek",
         apiKey: customConfig.apiKey,
+        baseUrl: customConfig.baseUrl,
         modelId: customConfig.modelId,
         thinkingMode: "disabled",
       };

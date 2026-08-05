@@ -8,12 +8,14 @@ import type { ClientModelConfig } from "@/lib/ai/model-config";
 
 /** Identifies provider endpoint changes that require remounting the active chat controller. */
 export function modelEndpointSignature(config: ClientModelConfig) {
-  if (config.provider === "kimi") return `${config.provider}:${config.modelId}`;
+  if (config.provider === "kimi") {
+    return `${config.provider}:${config.baseUrl}:${config.modelId}`;
+  }
   if (config.provider === "deepseek") {
-    return `${config.provider}:${config.modelId}:${config.thinkingMode}`;
+    return `${config.provider}:${config.baseUrl}:${config.modelId}:${config.thinkingMode}`;
   }
   if (config.provider === "anthropic-byok") {
-    return `${config.provider}:${config.modelId}`;
+    return `${config.provider}:${config.baseUrl}:${config.modelId}`;
   }
   if (config.provider === "custom") {
     return `${config.provider}:${config.baseUrl}:${config.modelId}`;
